@@ -1,0 +1,314 @@
+logic sử lý khi thực hiện thanh toán.
+Khi phía service order đã hoàn tất quả trình tạo đơn hàng sẽ thực hiện
+ gửi thông tin đơn hàng vừa tạo qua service này, thông tin gồm:
+ 
+{
+  "user_info": {
+    "name": "Nguyen Van A",
+    "phoneNumber": "0987654321",
+    "address": "123 Đường ABC, Quận 1, TP.HCM"
+  },
+  "items": [
+    {
+      "product_id": "P001",
+      "name": "Sản phẩm A",
+      "image_url": "https://example.com/images/productA.jpg",
+      "quantity": 2,
+      "price": 150000
+    },
+    {
+      "product_id": "P002",
+      "name": "Sản phẩm B",
+      "image_url": "https://example.com/images/productB.jpg",
+      "quantity": 1,
+      "price": 250000
+    }
+  ],
+  "order_id": "ORD123456",
+  "amount": 550000,
+  "payment":{
+    "type": "OFFLINE",
+    "provider": "COD"
+     }
+  // hoặc 
+   "payment":{"type": "ONLINE", "provider": "MOMO"}  // provider sẽ là bên cung cấp thanh toán
+}
+
+Khi sử lý thanh toán Offline:
+Bối cảnh ví dụ:
+
+Một đơn hàng shop-ord-123 của Shop ABC được khách hàng thanh toán 100,000đ.
+Phí hoa hồng của sàn là 10% (10,000đ).
+Thời gian sàn tạm giữ tiền sau khi giao hàng thành công là 7 ngày.
+
+Giai đoạn 1: Khách hàng đặt và thanh toán đơn hàng
+Mục tiêu: Ghi nhận một cách an toàn khoản thanh toán từ khách hàng và tạm giữ số tiền đó trong hệ thống.
+Kích hoạt: Phía order service hoàn tất order và bắt đầu tạo thanh toán.
+Các bên liên quan: Order Service, Transaction Service, Cổng thanh toán.
+
+Quy trình chi tiết từng bước:
+
+Hành động: Order Service nhận yêu cầu đặt hàng, sau khi xử lý xong sẽ gọi đến Transaction Service để khởi tạo giao dịch.
+
+Hành động: Transaction Service tạo một bản ghi trong bảng transactions với status: 'PENDING'. Nếu là thanh toán online, nó gọi cổng thanh toán và trả paymentUrl về.
+
+Hành động(Thanh toán online): Khách hàng thanh toán thành công. Cổng thanh toán gọi webhook đến Transaction Service.
+
+Hành động(Thanh toán online): Transaction Service xác thực webhook, tìm giao dịch PENDING và cập nhật status: 'SUCCESS', processed_at = NOW().
+/////
+// ứng dụng của hiển chỉ làm tới bước xác nhận webhook VÀ cập nhật trạng thái lại là dừng không code thêm nữa. Các bước ở dưới tương lai sẽ thực hiện.
+/////
+Hành động (Kế toán nội bộ): Hệ thống kích hoạt một tác vụ sau khi giao dịch thành công.
+  + Tạo 1 bút toán trong ledger_entries để cộng tiền vào ví chờ của Sàn: CREDIT +100,000đ vào pending_balance của PLATFORM.
+  + Tạo 1 bản ghi shop_order_settlements cho shop-ord-123 với status: 'PENDING_SETTLEMENT'.
+Xử lý lỗi & Các trường hợp ngoại lệ:
+  + Thanh toán thất bại: Cổng thanh toán báo lỗi hoặc không phản hồi. Giao dịch trong transactions được cập nhật sang status: 'FAILED'. Order Service được thông báo để hủy đơn hàng. Sẽ không có bút toán nào được tạo ra.
+  + Lỗi khi ghi bút toán: Nếu việc ghi vào ledger_entries hoặc settlements thất bại sau khi giao dịch đã SUCCESS, hệ thống phải có một cơ chế "đối soát lại". Một tác vụ nền sẽ định kỳ quét các giao dịch SUCCESS nhưng chưa có bản ghi settlements tương ứng để chạy lại quy trình kế toán.
+
+Giai đoạn 2: Đơn hàng hoàn thành
+Mục tiêu: Ghi nhận thời điểm đơn hàng được giao thành công để bắt đầu tính thời gian tạm giữ tiền.
+Kích hoạt: Order Service nhận được tín hiệu "Giao hàng thành công" từ Shipping Service hoặc ĐVVC.
+Các bên liên quan: Order Service, Transaction Service.
+
+Quy trình chi tiết từng bước:
+
+Hành động: Order Service cập nhật trạng thái shop_order thành COMPLETED.
+
+Hành động: Order Service gửi một sự kiện/gọi API đến Transaction Service, thông báo rằng shop-ord-123 đã hoàn thành vào thời điểm YYYY-MM-DD HH:MM:SS.
+
+Hành động: Transaction Service nhận thông báo, tìm bản ghi shop_order_settlements của shop-ord-123 và cập nhật:
+  + status thành FUNDS_HELD (Tiền đang được tạm giữ).
+  + order_completed_at thành thời gian mà Order Service gửi qua.
+
+Xử lý lỗi & Các trường hợp ngoại lệ:
+  + Mất tín hiệu thông báo: Nếu Transaction Service không nhận được thông báo, bản ghi settlements sẽ kẹt ở trạng thái PENDING_SETTLEMENT. Một tác vụ nền cần chạy định kỳ để đối soát trạng thái giữa hai service và tự động cập nhật.
+
+Giai đoạn 3: Tự động Đối soát và Chuyển tiền vào Ví Shop
+Mục tiêu: Tự động chuyển tiền từ "ví chờ" của Sàn sang "ví khả dụng" của Shop sau khi hết thời gian tạm giữ.
+Kích hoạt: Tác vụ nền (Scheduled Job/Cron Job) chạy định kỳ (ví dụ: mỗi giờ).
+Các bên liên quan: Transaction Service.
+
+Quy trình chi tiết từng bước:
+
+Hành động: Tác vụ nền được kích hoạt.
+
+Hành động: Tác vụ truy vấn bảng shop_order_settlements để tìm các bản ghi thỏa mãn điều kiện: status = 'FUNDS_HELD' VÀ order_completed_at <= NOW() - 7 ngày. Giả sử shop-ord-123 thỏa mãn.
+
+Hành động (Kế toán - Critical Section): Hệ thống bắt đầu một DB Transaction lớn cho shop-ord-123.
+a.  Tạo bút toán DEBIT -100,000đ vào pending_balance của ví Sàn.
+b.  Tạo bút toán CREDIT +10,000đ vào balance của ví Sàn (tiền hoa hồng).
+c.  Tạo bút toán CREDIT +90,000đ vào balance của ví Shop ABC.
+d.  Cập nhật bản ghi shop_order_settlements sang status: 'SETTLED' và ghi nhận settled_at = NOW().
+
+Hành động: Hệ thống commit DB Transaction. Nếu thành công, tiền đã nằm trong ví khả dụng của Shop.
+
+Xử lý lỗi & Các trường hợp ngoại lệ:
+  + Lỗi trong DB Transaction (Bước 3): Nếu bất kỳ lệnh ghi nào trong 4 lệnh a, b, c, d thất bại (ví dụ: CSDL mất kết nối), toàn bộ transaction sẽ được ROLLBACK. Mọi thứ trở về trạng thái trước đó. Bản ghi settlements vẫn là FUNDS_HELD. Tác vụ nền sẽ tự động thử lại ở lần chạy tiếp theo. Hệ thống phải ghi log lỗi chi tiết để theo dõi.
+
+Giai đoạn 4: Shop rút tiền về tài khoản ngân hàng
+Mục tiêu: Cho phép Shop rút số tiền khả dụng trong ví của họ về tài khoản ngân hàng cá nhân.
+Kích hoạt: Shop chủ động thực hiện hành động "Rút tiền" trên trang quản trị.
+Các bên liên quan: Transaction Service, Bộ phận Tài chính/Kế toán.
+
+Quy trình chi tiết từng bước:
+
+Hành động: Shop vào trang "Ví tiền", thấy số dư khả dụng (balance) là 90,000đ và nhấn nút "Rút tiền".
+
+Hành động: Hệ thống kiểm tra số tiền rút có hợp lệ không (nhỏ hơn hoặc bằng balance).
+
+Hành động: Transaction Service tạo một bản ghi transaction mới với type: 'PAYOUT', amount: 90000, status: 'PROCESSING'.
+
+Hành động (Kế toán): Hệ thống ngay lập tức tạo bút toán DEBIT -90,000đ vào balance của ví Shop. Số dư của shop giờ về 0.
+
+Hành động (Thủ công): Yêu cầu rút tiền được tạo ra và hiển thị trên dashboard của bộ phận tài chính.
+
+Hành động (Thủ công): Nhân viên tài chính thực hiện lệnh chuyển khoản 90,000đ qua hệ thống ngân hàng cho Shop.
+
+Hành động: Sau khi chuyển khoản thành công, nhân viên tài chính vào hệ thống và cập nhật giao dịch PAYOUT ở Bước 3 sang status: 'SUCCESS'.
+
+Xử lý lỗi & Các trường hợp ngoại lệ:
+  + Số dư không đủ: Hệ thống báo lỗi cho Shop ở Bước 2.
+
+Chuyển khoản ngân hàng thất bại: Nhân viên tài chính sẽ cập nhật giao dịch PAYOUT sang status: 'FAILED'. Hệ thống phải có một quy trình "hoàn lại tiền": tạo một bút toán CREDIT +90,000đ ngược lại vào balance của ví Shop và thông báo cho Shop biết giao dịch rút tiền đã thất bại.
+
+
+
+
+
+Ví dụ cho 4 giai đoạn trên:
+
+Bối cảnh của Ví dụ Mới
+Khách hàng: Mua hàng và thanh toán 1 lần duy nhất.
+Đơn hàng tổng: order_id: 'ord-multi-456'.
+Shop A (shop-a-uuid):
+  Đơn hàng của shop: shop_order_id: 'shop-ord-A01'.
+  Sản phẩm: 1 sản phẩm, giá 80,000đ.
+  Hoa hồng sàn (10%): 8,000đ.
+  Thực nhận: 72,000đ
+Shop B (shop-b-uuid):
+  Đơn hàng của shop: shop_order_id: 'shop-ord-B02'.
+  Sản phẩm: 2 sản phẩm, tổng giá trị 150,000đ.
+  Hoa hồng sàn (10%): 15,000đ.
+  Thực nhận: 135,000đ.
+Tổng thanh toán của khách hàng: 80,000đ + 150,000đ = 230,000đ.
+Thời gian tạm giữ: 7 ngày sau khi từng đơn hàng shop được giao thành công.
+Trạng thái ban đầu: Ví của Sàn, Shop A, Shop B đều có balance = 0 và pending_balance = 0.
+
+Giai đoạn 1: Khách hàng đặt và thanh toán đơn hàng
+Hành động: Khách hàng hoàn tất thanh toán 230,000đ cho toàn bộ đơn hàng ord-multi-456.
+Ai thực hiện: Order Service khởi tạo, Transaction Service xử lý.
+Kết quả trong CSDL:
+  Bảng transactions (Tạo 1 bản ghi DUY NHẤT cho cả lần thanh toán):
+    id: 'txn-pay-003'
+    order_id: 'ord-multi-456' (ID của đơn hàng tổng)
+    amount: 230000.00
+    type: 'PAYMENT'
+    status: 'SUCCESS'
+
+  Bảng ledger_entries (Tạo 1 bút toán DUY NHẤT cho tổng số tiền vào):Bước này sau khi sàn đã thật sự có tiền NẾU LÀ THANH TOÁN OFFLINE THÌ SẼ KHÔNG THỰC HIỆN BƯỚC NÀY, CHỜ THANH TOÁN OFFLINE HOÀN TẤT MỚI TẠO. 
+    ledger_id: 'platform-ledger-uuid' (Ví của Sàn)
+    transaction_id: 'txn-pay-003'
+    amount: +230000.00
+    type: 'CREDIT'
+    description: "Customer payment for master order ord-multi-456"
+    
+  Bảng account_ledgers (Cập nhật ví Sàn):Bước này sau khi sàn đã thật sự có tiền  NẾU LÀ THANH TOÁN OFFLINE THÌ SẼ KHÔNG THỰC HIỆN BƯỚC NÀY, CHỜ KHI THANH TOÁN OFFLINE SONG MỚI CỘNG
+    owner_id: 'platform-uuid'
+    balance: 0.00 (Không đổi)
+    pending_balance: 230000.00 (Toàn bộ số tiền vào ví chờ)
+    
+  Bảng shop_order_settlements (Tạo 2 bản ghi mới, cho mỗi shop_order):
+    Bản ghi 1 (cho Shop A):
+      shop_order_id: 'shop-ord-A01'
+      order_transaction_id: 'txn-pay-003' (Liên kết tới giao dịch tổng)
+      status: 'PENDING_SETTLEMENT'
+      order_total_amount: 80000.00
+      commission_fee: 8000.00
+      net_settled_amount: 72000.00
+    Bản ghi 2 (cho Shop B):
+      shop_order_id: 'shop-ord-B02'
+      order_transaction_id: 'txn-pay-003' (Cũng liên kết tới giao dịch tổng)
+      status: 'PENDING_SETTLEMENT'
+      order_total_amount: 150000.00
+      commission_fee: 15000.00
+      net_settled_amount: 135000.00
+
+Giai đoạn 2: Đơn hàng hoàn thành (độc lập)
+Các gói hàng có thể được giao vào những thời điểm khác nhau.
+
+Hành động 1: Sau 2 ngày, đơn hàng của Shop A (shop-ord-A01) được giao thành công.
+Ai thực hiện: Order Service → Transaction Service.
+Kết quả trong CSDL:
+  Bảng shop_order_settlements (Cập nhật bản ghi của Shop A):
+    shop_order_id: 'shop-ord-A01'
+    status: 'FUNDS_HELD' (Tiền đang được tạm giữ)
+    order_completed_at: 2025-10-17 11:00:00
+
+Trường hợp thanh toán offline
+  Bảng ledger_entries: Trường hợp thanh toán OFFLINE , tạo giao dịch chuyển tiền vào ví của sàn
+    ledger_id: 'platform-ledger-uuid' (Ví của Sàn)
+    transaction_id: 'txn-pay-003'
+    amount: +230000.00
+    type: 'CREDIT'
+    description: "Customer payment for master order ord-multi-456"
+
+  Bảng account_ledgers: Trường hợp thanh toán OFFLINE , cộng tiền vào ví của sàn
+    owner_id: 'platform-uuid'
+    balance: 0.00 (Không đổi)
+    pending_balance: 230000.00 (Toàn bộ số tiền vào ví chờ)
+
+
+Hành động 2: Sau 4 ngày, đơn hàng của Shop B (shop-ord-B02) mới được giao thành công.
+    Ai thực hiện: Order Service → Transaction Service.
+    Kết quả trong CSDL:
+    
+  Bảng shop_order_settlements (Cập nhật bản ghi của Shop B):
+    shop_order_id: 'shop-ord-B02'
+    status: 'FUNDS_HELD'
+    order_completed_at: 2025-10-19 16:30:00
+
+  
+Trường hợp thanh toán offline
+  Bảng ledger_entries: Trường hợp thanh toán OFFLINE , tạo giao dịch chuyển tiền vào ví của sàn
+    ledger_id: 'platform-ledger-uuid' (Ví của Sàn)
+    transaction_id: 'txn-pay-003'
+    amount: +230000.00
+    type: 'CREDIT'
+    description: "Customer payment for master order ord-multi-456"
+
+  Bảng account_ledgers: Trường hợp thanh toán OFFLINE , cộng tiền vào ví của sàn
+    owner_id: 'platform-uuid'
+    balance: 0.00 (Không đổi)
+    pending_balance: 230000.00 (Toàn bộ số tiền vào ví chờ)
+
+
+
+Giai đoạn 3: Tự động Đối soát (xảy ra ở các thời điểm khác nhau)
+Tác vụ tự động chạy hàng ngày để tìm các đơn hàng đã qua 7 ngày tạm giữ.
+Hành động 1: Vào ngày 2025-10-24, tác vụ phát hiện đơn shop-ord-A01 đã đủ điều kiện (7 ngày sau 2025-10-17).
+Ai thực hiện: Tác vụ tự động của Transaction Service.
+Kết quả trong CSDL (cho Shop A):
+  Bảng ledger_entries (Tạo 3 bút toán cho Shop A):
+    DEBIT -80000.00 từ pending_balance của Sàn.
+    CREDIT +8000.00 vào balance của Sàn (hoa hồng).
+    CREDIT +72000.00 vào balance của Shop A.
+    
+  Bảng account_ledgers (Cập nhật số dư):
+    Ví Sàn: pending_balance: 230000 - 80000 = 150000.00, balance: 8000.00.
+    Ví Shop A: balance: 72000.00.
+    Bảng shop_order_settlements (Cập nhật bản ghi của Shop A):
+    status: 'SETTLED'
+    settled_at: 2025-10-24 09:00:00
+    Hành động 2: Vào ngày 2025-10-26, tác vụ phát hiện đơn shop-ord-B02 đã đủ điều kiện.
+    Ai thực hiện: Tác vụ tự động của Transaction Service.
+    Kết quả trong CSDL (cho Shop B):
+    
+  Bảng ledger_entries (Tạo 3 bút toán cho Shop B):
+    DEBIT -150000.00 từ pending_balance của Sàn.
+    CREDIT +15000.00 vào balance của Sàn.
+    CREDIT +135000.00 vào balance của Shop B.
+    
+  Bảng account_ledgers (Cập nhật số dư):
+    Ví Sàn: pending_balance: 150000 - 150000 = 0.00, balance: 8000 + 15000 = 23000.00.
+    Ví Shop B: balance: 135000.00.
+    
+  Bảng shop_order_settlements (Cập nhật bản ghi của Shop B):
+    status: 'SETTLED'
+    settled_at: 2025-10-26 09:00:00
+
+Giai đoạn 4: Shop rút tiền về tài khoản ngân hàng (độc lập)
+Giờ đây, mỗi shop có một số dư riêng và có thể rút tiền bất cứ lúc nào.
+Hành động: Shop B thấy ví có 135,000đ và thực hiện lệnh rút tiền.
+Ai thực hiện: Frontend (Dashboard của Shop) → Transaction Service.
+Kết quả trong CSDL:
+    Bảng transactions (Tạo 1 bản ghi Payout MỚI):
+      id: 'txn-payout-B01'
+      order_id: NULL
+      amount: 135000.00
+      type: 'PAYOUT'
+      status: 'PROCESSING'
+
+    Bảng ledger_entries (Tạo 1 bút toán trừ tiền ví Shop B):
+      ledger_id: 'shop-b-ledger-uuid'
+      transaction_id: 'txn-payout-B01'
+      amount: -135000.00
+      type: 'DEBIT'
+      description: "Withdrawal request for Shop B"
+    
+    Bảng account_ledgers (Cập nhật ví Shop B):
+      balance: 135000 - 135000 = 0.00
+
+Quy trình kết thúc khi kế toán chuyển khoản thành công và cập nhật transaction txn-payout-B01 sang status: 'SUCCESS'. Shop A có thể thực hiện một quy trình rút tiền tương tự cho 72,000đ của họ vào một thời điểm khác.
+
+
+
+
+
+Đặt hàng thành công, đã thanh toán sẽ bắt đầu:
+Cập nhật trang thái order 
+
+
+
+
+
+Theme check xem voucher shop co nam trong cac item duoc dat hay khong

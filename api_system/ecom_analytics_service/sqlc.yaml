@@ -1,0 +1,38 @@
+version: "2"
+sql:
+  - engine: "mysql"
+    queries: "./db/query/transaction/"
+    schema: "./db/migration/transaction/"
+    gen:
+      go:
+        package: "db"
+        sql_package : "database/sql"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_exact_table_names: true
+        out: "./db/sqlc/transaction"
+  - engine: "mysql"
+    queries: "./db/query/order/"
+    schema: "./db/migration/order/"
+    gen:
+      go:
+        package: "db"
+        sql_package : "database/sql"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_exact_table_names: true
+        out: "./db/sqlc/order"
+  - engine: "mysql"
+    queries: "./db/query/interact/"
+    schema: "./db/migration/interact/"
+    gen:
+      go:
+        package: "db"
+        sql_package : "database/sql"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_exact_table_names: true
+        out: "./db/sqlc/interact"

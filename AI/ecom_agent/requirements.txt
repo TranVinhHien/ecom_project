@@ -1,0 +1,13 @@
+google-adk==1.15.0
+a2a-sdk==0.2.6
+nest-asyncio>=1.6.0
+python-dotenv
+click
+uvicorn
+google-generativeai
+httpx
+fastapi
+pydantic
+pymysql
+PyJWT
+litellm==1.77.1

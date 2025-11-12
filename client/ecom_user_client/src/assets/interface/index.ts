@@ -1,0 +1,1 @@
+// foolder này sẽ lưu tất cả các interface về dữ liệu.

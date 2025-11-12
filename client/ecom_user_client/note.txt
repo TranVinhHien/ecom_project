@@ -1,0 +1,22 @@
+package của ứng dụng:
+    tanstack:
+        npm i @tanstack/react-query
+    axios:
+        npm i axios
+    momnet:
+        npm i moment
+    jwt:
+        npm i jwt-decode  --force
+    redux:
+        npm i @reduxjs/toolkit
+        npm i react-redux --force
+    token:
+        #npm i cookies-next --force
+    i18next:
+        npm i next-intl
+        npm i i18next
+    icon:
+        npm i react-icons
+    cookies:
+        npm i cookies-next@4.3.0
+

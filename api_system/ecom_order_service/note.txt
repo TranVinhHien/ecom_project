@@ -1,0 +1,35 @@
+
+logic sử lý tạo đơn hàn bao gồm:
+Sau khi người dùng đã lựa chọn phương thức thanh toán,Địa chỉ giao hàng, Đơn vị
+vận chuyển, sản phẩm muốn mua và các mã giả giá.
+Bước 1: Validate request
+Bước 2: Lấy thông tin sản phẩm từ Product Service
+Bước 3: Validate tồn kho
+Bước 4: Nhóm items theo shop
+Bước 5: Tạo order ID và order code
+Bước 6: Tạo các shop orders và tính toán tổng tiền( ở bước này có tính luôn tiền theo mã giảm giá)
+Bước 7: Kiểm tra các vouchers có đủ điều kiện để dùng hay không (nếu lỗi trả về)
+Bước 8: Reserve stock cho tất cả items
+Bước 9: Lưu order vào database trong transaction 
+9.1: Lưu order vào db
+9.2: Lưu shop orders vào db
+- nếu thanh toán OFFLINE thì sẽ lưu trạng thái đơn shop là  là "PROCESSING"
+- nếu thanh toán ONLINE thì sẽ lưu trạng thái đơnn là "AWAITING_CONFIRMATION"
+Ở bước 9 nêu gặp lỗi trong quá trình tạo sẽ thực hiện rollback lại transaction và Rollback stock reservation
+Bước 10: * Thực hiện gọi tới service thanh toán ,nếu thanh toán online sẽ có url trả về từ những bên thứ 3 như momo hay vnpay gì đó tương ứng và trả về url thanh toán
+Bước 11: Trả về kết thành công hay thất bại của quá trình tạo order
+
+
+
+logic cập nhật trạng thái đơn hàng.
+Có 1 loại cập nhật đơn hàng là cập nhật từng đơn hàng shop
+- Lúc đầu sẽ là AWAITING_PAYMENT cho đơn hàng thanh toán onl và PROCESSING với OFFLINE
+- Khi thanh toán ONL thành công sẽ gọi tới cập nhật thành PROCESSING
+- SHIPPED khi đã gửi đơn hàng cho bên vận chuyển. bên thứ 3 sẽ gọi tới api này để cập nhật
+- COMPLETED Khi bên vân chuyển xác nhận đã hoàn thành đơn hàng
+- CANCELLED Khi dơn bị hủy, ở đây đơn hàng được hủy khi nó đang ở trạng thái
+AWAITING_PAYMENT hoặc PROCESSING. Các trạng thái sau đơn hàng không được hủy nữa
+- REFUNDED khi đơn hàng được bên hệ thống kiếm tra và chấp nhận trả lại đơn hàng . 
+
+
+

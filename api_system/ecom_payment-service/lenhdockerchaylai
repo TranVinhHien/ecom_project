@@ -1,0 +1,14 @@
+
+Lệnh docker chạy lại code 
+# Stop và xóa container cũ
+sudo docker stop ecom-payment-container 2>/dev/null || true
+sudo docker rm ecom-payment-container 2>/dev/null || true
+
+# Chạy container mới
+sudo docker run -d \
+  --name ecom-payment-container \
+  --env-file .env.docker \
+  --network e-commerce-network \
+  -p 9003:9003 \
+  --restart unless-stopped \
+  ecom-payment-service:latest

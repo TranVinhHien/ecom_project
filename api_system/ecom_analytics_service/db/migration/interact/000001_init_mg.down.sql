@@ -1,0 +1,7 @@
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS `customer_feedback`;
+DROP TABLE IF EXISTS `message_ratings`;
+
+
+SET FOREIGN_KEY_CHECKS = 1;

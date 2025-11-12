@@ -1,0 +1,30 @@
+Các Code trả về cho người dùng sẽ bao gồm:
+    - 500: Khi có lỗi từ hệ thống, cái này hệ thống tự trả không cần viết (Chỉ sảy ra khi sv lỗi không cần viết) 
+    - 404: không tìm thấy item cần tìm hay không trỏ tới api hiện có
+    - 403: Không đủ quyền truy cập
+    - 401: Không xác thực được người dùng
+    - 400: BadRequest trả về chung khi người dùng gửi sai yêu cầu nói chung và các hành động khác không đúng
+    - 200: Tất cả các hành động thực hiện thành công
+mẫu chung của 1 respose thành công
+{
+    "code": 10000, // bắt buộc
+    "message":"thông báo trả về ",//(bắt buộc)
+    "status":"success"|"error"|"not found"|"authentication"|"authorization",
+    "result":interface{},// lúc có lúc không trả về dữ liệu cho người dùng
+    "paging":{
+        "totalPages":4,// không bắc buộc chỉ trả về khi là get nhiều dữ liệu
+        "currentPages":1,// không bắc buộc chỉ trả về khi là get nhiều dữ liệu
+        "limitPages":3,// không bắc buộc chỉ trả về khi là get nhiều dữ liệu
+    }
+    "filters":{
+        // lọc theo những gì thì bỏ vào đây
+    }
+}
+mẫu chung của 1 respose Lỗi
+{
+    "code": 10000, // bắt buộc
+    "message":"thông báo trả về ",//(bắt buộc)
+    "status":"success"|"error"|"not found",
+    "result":interface{},// lúc có lúc không trả về dữ liệu cho người dùng
+
+}

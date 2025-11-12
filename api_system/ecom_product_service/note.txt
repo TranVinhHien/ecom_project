@@ -1,0 +1,53 @@
+tạo sản phẩm nhập các thông tin như 
+các
+Thông tin tại controller tạo sản phẩm.
+-name
+-description (mô tả dài )
+-short_description (mô tả ngắn)
+-image (ảnh đại diện , bắt buộc)
+-Danh sách ảnh(danh sách ảnh của sản phẩm, là không bắt buộc)
+-product_is_permission_return( tùy chọn được trả hàng)
+- product_is_permission_check( tùy chọn được kiểm hàng)
+
+Gửi luôn thông tin tạo danh sách option_value
+-option_name
+-value
+-image (tùy chọn)
+
+tạo danh sách product_sku 
+sku_code
+price
+quantity
+cân nặng
+
+Sau khi tạo song 2 phần option_value và product_sku này sẽ tạo ra thêm mảng sku_attr
+sku_id
+option_value_id
+
+Các thông tin về ID của đối tượng khi tạo sẽ dùng UUID.
+
+
+Tiếp theo về sửa sản phẩm
+sửa sản phẩm sẽ dùng phương thức PUT
+chỉ được sửa thông tin về product như 
+name,key,description,short_description,image,danh sách ảnh,product_is_permission_return,product_is_permission_check
+
+Trạng thái xóa sản phẩm thì delete_status sẽ thành Deleted
+Khi hiện trong trang giao diện sẽ hiệu toàn bộ thông tin kể cả option và sku.
+cập nhật option_value gồm
+option_name ,value (hiện ở giao diện thì option_name sẽ gom nhóm các option_name trùng tên lại thành 1 và hiện value ở dưới ra)
+image cũng có thể cập nhật ở đây.
+product_sku  sẽ được cập nhật về sku_code,price,quantity,cân nặng
+
+Tương tự cho xóa sản phẩm.
+Cuối cùng là lấy sản phẩm 
+sẽ có 2 mức lấy là
+-Lấy tổng thể (cho người dùng xem,hiện ở quản lý)
+lấy toàn bộ thông tin trừ chi tiết sản phẩm mô tả dài và media.
+Viết thêm 1 hàm ở csdl lấy giá của sản phẩm trong SKU bằng product_id và trả về, lấy giá thấp nhất và giá cao nhất của sản phẩm,hàm vẫn phải trả về 2 giá trị kể cả có bằng nhau.
+
+-lấy chi tiết(cho người dùng và quản lý):
+ở đây sẽ thực hiện tạo lấy tất cả dữ liệu từ nhiều nơi như product , option, sku, option_sku. Sau đó gom lại sử lý và trả  về người dùng.
+
+
+Việc thêm và sửa phải được sử lý trong 1 transaction

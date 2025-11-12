@@ -1,0 +1,2 @@
+ứng dụng chạy trên port 9101 với lệnh:
+ uvicorn vietnamese_vector_api.main:app --host 0.0.0.0 --port 9101 --reload

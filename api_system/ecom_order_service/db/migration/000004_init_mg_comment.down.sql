@@ -1,0 +1,8 @@
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS `vouchers`;
+DROP TABLE IF EXISTS `user_vouchers`;
+DROP TABLE IF EXISTS `voucher_usage_history`;
+
+
+SET FOREIGN_KEY_CHECKS = 1;

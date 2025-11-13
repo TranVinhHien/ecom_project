@@ -32,16 +32,8 @@ echo -e "${GREEN}✓ Cleanup completed${NC}\n"
 echo -e "${YELLOW}[3/4] Loading environment variables from .env.docker...${NC}"
 if [ ! -f .env.docker ]; then
     echo -e "${RED}✗ File .env.docker không tồn tại!${NC}"
-    echo -e "${YELLOW}Tạo file .env.docker với nội dung mẫu...${NC}"
-    cat > .env.docker << 'EOF'
-DB_SOURCE=root:12345@tcp(172.26.127.95:3306)/ecommerce_product_db?parseTime=true
-REDIS_ADDRESS=172.26.127.95:6379
-HTTP_SERVER_ADDRESS=0.0.0.0:9001
-JWT_SECRET=bv-T"-u6@-WR?SHiHQ7yQ]CK*dd9(@jM9BI)|g;zq)ur-Z.Jw/u5HyJHgg,KS.fa
-CLIENT_IP=http://localhost:9999,http://localhost:8989
-IMAGE_PATH=./images/
-EOF
-    echo -e "${GREEN}✓ File .env.docker đã được tạo${NC}"
+    echo -e "${YELLOW}Tạo .env.docker hoặc cung cấp file trước khi chạy.${NC}"
+    exit 1
 fi
 echo -e "${GREEN}✓ Environment variables loaded${NC}\n"
 

@@ -13,7 +13,7 @@ from google.adk.models.lite_llm import LiteLlm
 from google.genai import types
 from pydantic import BaseModel, Field
 from typing import List
-
+import os
 from host.agent.rag_promtp import AGENT_RAG_INSTRUCTION
 
 
@@ -34,6 +34,7 @@ class RAGAgent:
     def __init__(self, llm_model: str, session_service: InMemorySessionService):
         self._llm_model = llm_model
         self._session_service = session_service
+        self._search_api = os.getenv('SEARCH_RAG_API', 'http://localhost:9101')
         self._agent = self._create_agent()
         self.runner = Runner(
             app_name=self._agent.name,
@@ -167,7 +168,7 @@ class RAGAgent:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    "http://localhost:8000/search",
+                    f"{self._search_apis}/search",
                     json={"query_text": query, "top_k": 5, "doc_type": "product"},
                     timeout=10.0
                 )
@@ -191,7 +192,7 @@ class RAGAgent:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    "http://localhost:8000/search",
+                    f"{self._search_api}/search",
                     json={"query_text": query, "top_k": 5, "doc_type": "policy"},
                     timeout=10.0
                 )

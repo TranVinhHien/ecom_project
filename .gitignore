@@ -1,3 +1,45 @@
+# Environment files
 *.env
 *.env.docker
 *app.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+*.venv/
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Node modules (for client)
+node_modules/
+.next/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Other
+CV.sty

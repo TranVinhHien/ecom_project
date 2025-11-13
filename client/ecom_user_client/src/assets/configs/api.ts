@@ -1,4 +1,4 @@
-import { profile } from "console"
+// import { profile } from "console"
 
 
 // file này lưu tất cả các đường dẫn api
@@ -6,7 +6,7 @@ const API = {
     // Base URLs theo service
     base_vinh: "https://lemarchenoble.id.vn/api/v1",
     base_gateway: "https://lemarchenoble.id.vn/api/v1", // Identity, Profile, Address
-    base_agent: "http://localhost:9000/api", // Port 9000 - AI Agent
+    base_agent: "http://localhost:9102/api", // Port 9000 - AI Agent
     base_product: "http://172.26.127.95:9001/v1", // Port 9001 - Product Service
     base_order: "http://172.26.127.95:9002/v1", // Port 9002 - Order Service
     base_transaction: "http://172.26.127.95:9003/v1", // Port 9003 - Transaction Service

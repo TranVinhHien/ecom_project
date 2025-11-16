@@ -180,6 +180,15 @@ func NormalizeSQLNulls(input interface{}, key string) map[string]interface{} {
 
 	return map[string]interface{}{key: result}
 }
+func NormalizeToInterface(input interface{}) interface{} {
+	if input == nil {
+		return nil
+	}
+
+	// Normalize the input using the recursive helper
+	normalized := normalizeValue(input)
+	return normalized
+}
 
 // HideFields ẩn các field được chỉ định từ đối tượng hoặc mảng/slice và trả về dưới dạng map với key được cung cấp
 func HideFields(obj interface{}, key string, fieldsToHide ...string) (map[string]interface{}, error) {

@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import ROUTER from "@/assets/configs/routers";
+import ReviewDialog from "@/components/ReviewDialog";
 
 const ORDER_TABS: { value: OrderStatus | 'ALL'; label: string; icon: any }[] = [
   { value: 'ALL', label: 'Tất cả đơn hàng', icon: Codesandbox  },
@@ -18,7 +19,7 @@ const ORDER_TABS: { value: OrderStatus | 'ALL'; label: string; icon: any }[] = [
   { value: 'PROCESSING', label: 'Đang xử lý', icon: PackageCheck },
   { value: 'SHIPPED', label: 'Đang giao hàng', icon: Truck },
   { value: 'COMPLETED', label: 'Hoàn thành', icon: CheckCircle },
-  { value: 'CANCELED', label: 'Đã hủy', icon: XCircle },
+  { value: 'CANCELLED', label: 'Đã hủy', icon: XCircle },
   { value: 'REFUNDED', label: 'Trả hàng/Hoàn tiền', icon: RefreshCcw },
 ];
 
@@ -27,6 +28,19 @@ export default function OrdersPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<OrderStatus | 'ALL'>('ALL');
   const limit = 10;
+
+  // Review Dialog State
+  const [reviewDialog, setReviewDialog] = useState<{
+    isOpen: boolean;
+    orderItemId: string;
+    productName: string;
+    productImage: string;
+  }>({
+    isOpen: false,
+    orderItemId: "",
+    productName: "",
+    productImage: "",
+  });
 
   // Intersection Observer ref để phát hiện khi scroll đến cuối
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -39,11 +53,12 @@ export default function OrdersPage() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    refetch,
   } = useGetOrdersInfinite({
     limit,
     status: activeTab === 'ALL' ? undefined : activeTab,
   });
-
+  // console.log('Orders data:', data);
   // Setup Intersection Observer để tự động load thêm khi scroll xuống
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -59,7 +74,7 @@ export default function OrdersPage() {
         rootMargin: '100px', // Load trước 100px
       }
     );
-
+    console.log('Orders data:', data);
     if (loadMoreRef.current) {
       observer.observe(loadMoreRef.current);
     }
@@ -111,7 +126,7 @@ export default function OrdersPage() {
         return 'text-purple-600 bg-purple-50';
       case 'COMPLETED':
         return 'text-green-600 bg-green-50';
-      case 'CANCELED':
+      case 'CANCELLED':
         return 'text-red-600 bg-red-50';
       case 'REFUNDED':
         return 'text-orange-600 bg-orange-50';
@@ -152,11 +167,38 @@ export default function OrdersPage() {
 
   /**
    * Xử lý đánh giá sản phẩm
-   * @param orderId - ID của đơn hàng cần đánh giá
+   * @param orderItemId - ID của order item cần đánh giá
+   * @param productName - Tên sản phẩm
+   * @param productImage - Ảnh sản phẩm
    */
-  const handleReview = (orderId: string) => {
-    // TODO: Implement review logic
-    console.log('Đánh giá đơn hàng:', orderId);
+  const handleReview = (orderItemId: string, productName: string, productImage: string) => {
+    setReviewDialog({
+      isOpen: true,
+      orderItemId,
+      productName,
+      productImage,
+    });
+  };
+
+  /**
+   * Đóng review dialog
+   */
+  const handleCloseReviewDialog = () => {
+    setReviewDialog({
+      isOpen: false,
+      orderItemId: "",
+      productName: "",
+      productImage: "",
+    });
+  };
+
+  /**
+   * Callback khi review thành công
+   */
+  const handleReviewSuccess = () => {
+    // Refetch orders to update reviewed status
+    refetch();
+    console.log('Review submitted successfully, refetching orders...');
   };
 
   /**
@@ -209,7 +251,7 @@ export default function OrdersPage() {
   /**
    * Render các nút action dựa trên trạng thái đơn hàng
    */
-  const renderOrderActions = (orderId: string, shopId: string, status: OrderStatus) => {
+  const renderOrderActions = (orderId: string, shopId: string, status: OrderStatus, items?: any[]) => {
     const commonButtons = {
       contactSeller: (
         <Button 
@@ -279,14 +321,6 @@ export default function OrdersPage() {
         return (
           <>
             <Button 
-              variant="default" 
-              size="sm" 
-              className="bg-green-600 hover:bg-green-700"
-              onClick={() => handleReview(orderId)}
-            >
-              Đánh Giá
-            </Button>
-            <Button 
               variant="outline" 
               size="sm" 
               className="text-red-600 border-red-600 hover:bg-red-50"
@@ -299,7 +333,7 @@ export default function OrdersPage() {
           </>
         );
 
-      case 'CANCELED':
+      case 'CANCELLED':
       case 'REFUNDED':
         return (
           <>
@@ -368,7 +402,9 @@ export default function OrdersPage() {
         <>
           {allOrders && allOrders.length > 0 ? (
             <div className="space-y-4">
-              {allOrders.map((order) => (
+              {allOrders.map((orderData) => {
+                const order = orderData.order_shop; // Extract shop order from nested structure
+                return (
                 <Card key={order.shop_order_id} className="border-2 hover:shadow-lg transition-shadow">
                   <CardContent className="p-6">
                     {/* Order Header */}
@@ -418,16 +454,45 @@ export default function OrdersPage() {
                             </h3>
                             <p className="text-sm text-gray-500 mb-1">{item.sku_attributes}</p>
                             <p className="text-sm text-gray-600">x{item.quantity}</p>
-                          </div>
-                          <div className="text-right">
-                            {item.original_unit_price > item.final_unit_price && (
-                              <p className="text-sm text-gray-400 line-through">
-                                {formatPrice(item.original_unit_price)}
-                              </p>
+                            
+                            {/* Review Status Badge */}
+                            {order.status === 'COMPLETED' && (
+                              <div className="mt-2">
+                                {item.reviewed ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-full border border-green-200">
+                                    <CheckCircle className="w-3 h-3" />
+                                    Bạn đã đánh giá sản phẩm này
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-50 text-yellow-700 text-xs font-medium rounded-full border border-yellow-200 animate-pulse">
+                                    <Clock className="w-3 h-3" />
+                                    Chưa đánh giá
+                                  </span>
+                                )}
+                              </div>
                             )}
-                            <p className="font-semibold text-[hsl(var(--primary))]">
-                              {formatPrice(item.final_unit_price)}
-                            </p>
+                          </div>
+                          <div className="text-right flex flex-col justify-between">
+                            <div>
+                              {item.original_unit_price > item.final_unit_price && (
+                                <p className="text-sm text-gray-400 line-through">
+                                  {formatPrice(item.original_unit_price)}
+                                </p>
+                              )}
+                              <p className="font-semibold text-[hsl(var(--primary))]">
+                                {formatPrice(item.final_unit_price)}
+                              </p>
+                            </div>
+                            {order.status === 'COMPLETED' && !item.reviewed && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-green-600 border-green-600 hover:bg-green-50 mt-2 font-semibold shadow-sm"
+                                onClick={() => handleReview(item.item_id, item.product_name, item.product_image)}
+                              >
+                                Đánh giá ngay
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -436,22 +501,65 @@ export default function OrdersPage() {
                     {/* Order Footer */}
                     <div className="flex justify-between items-center pt-4 border-t">
                       <div className="flex gap-2 flex-wrap">
-                        {renderOrderActions(order.shop_order_id, order.shop_id, order.status)}
+                        {renderOrderActions(order.shop_order_id, order.shop_id, order.status, order.items)}
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600 mb-1">
-                          Thành tiền: <span className="text-xl font-bold text-[hsl(var(--primary))]">{formatPrice(order.total_amount)}</span>
-                        </p>
+                      <div className="text-right space-y-1">
+                        {/* Subtotal */}
+                        <div className="flex justify-end items-center gap-2 text-sm text-gray-600">
+                          <span>Tổng tiền hàng:</span>
+                          <span className="font-medium">{formatPrice(order.subtotal)}</span>
+                        </div>
+                        
+                        {/* Shipping Fee */}
                         {order.shipping_fee > 0 && (
-                          <p className="text-xs text-gray-500">
-                            (Phí vận chuyển: {formatPrice(order.shipping_fee)})
-                          </p>
+                          <div className="flex justify-end items-center gap-2 text-sm text-gray-600">
+                            <span>Phí vận chuyển:</span>
+                            <span className="font-medium">{formatPrice(order.shipping_fee)}</span>
+                          </div>
                         )}
+                        
+                        {/* Shop Voucher Discount */}
+                        {order.shop_voucher_discount > 0 && (
+                          <div className="flex justify-end items-center gap-2 text-sm text-green-600">
+                            <span>Giảm giá voucher shop:</span>
+                            <span className="font-medium">-{formatPrice(order.shop_voucher_discount)}</span>
+                          </div>
+                        )}
+                        
+                        {/* Site Order Discount */}
+                        {order.site_order_discount > 0 && (
+                          <div className="flex justify-end items-center gap-2 text-sm text-green-600">
+                            <span>Giảm giá voucher sàn:</span>
+                            <span className="font-medium">-{formatPrice(order.site_order_discount)}</span>
+                          </div>
+                        )}
+                        
+                        {/* Site Shipping Discount */}
+                        {order.site_shipping_discount > 0 && (
+                          <div className="flex justify-end items-center gap-2 text-sm text-green-600">
+                            <span>Giảm phí vận chuyển:</span>
+                            <span className="font-medium">-{formatPrice(order.site_shipping_discount)}</span>
+                          </div>
+                        )}
+                        
+                        {/* Total Discount Summary */}
+                        {order.total_discount > 0 && (
+                          <div className="flex justify-end items-center gap-2 text-sm font-medium text-green-600 pt-1 border-t border-gray-200">
+                            <span>Tổng giảm giá:</span>
+                            <span>-{formatPrice(order.total_discount)}</span>
+                          </div>
+                        )}
+                        
+                        {/* Grand Total */}
+                        <div className="flex justify-end items-center gap-2 pt-2 border-t-2 border-gray-300">
+                          <span className="text-sm text-gray-600">Thành tiền:</span>
+                          <span className="text-xl font-bold text-[hsl(var(--primary))]">{formatPrice(order.total_amount-order.total_discount)}</span>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              );})}
 
               {/* Load More Trigger - Invisible element to trigger intersection observer */}
               <div ref={loadMoreRef} className="flex justify-center py-4">
@@ -479,6 +587,16 @@ export default function OrdersPage() {
           )}
         </>
       )}
+
+      {/* Review Dialog */}
+      <ReviewDialog
+        isOpen={reviewDialog.isOpen}
+        onClose={handleCloseReviewDialog}
+        orderItemId={reviewDialog.orderItemId}
+        productName={reviewDialog.productName}
+        productImage={reviewDialog.productImage}
+        onSuccess={handleReviewSuccess}
+      />
     </div>
   );
 }

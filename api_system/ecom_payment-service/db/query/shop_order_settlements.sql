@@ -12,13 +12,15 @@ INSERT INTO shop_order_settlements (
   order_subtotal,
   shop_funded_product_discount,
   site_funded_product_discount,
+  site_order_discount,
+  site_shipping_discount,
   shop_voucher_discount,
   shop_shipping_discount,
   shipping_fee,
   commission_fee,
   net_settled_amount
 ) VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 );
 
 -- name: GetSettlementByID :one

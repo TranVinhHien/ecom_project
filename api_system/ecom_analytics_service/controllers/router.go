@@ -30,7 +30,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 	// Tất cả API trong nhóm này yêu cầu đăng nhập và có vai trò "SHOP"
 	shop := group.Group("/shop").
 		Use(authorization(api.jwt)).
-		Use(checkRole("SELLER")).
+		Use(checkRole("ROLE_SELLER")).
 		Use(getShopID()) // Middleware để lấy shop_id và lưu vào context
 	{
 		// Nhóm 1: Tổng quan

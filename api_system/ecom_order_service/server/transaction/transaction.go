@@ -27,6 +27,9 @@ type SettlementDetail struct {
 	ShopVoucherDiscount       float64 `json:"shop_voucher_discount" `            // Voucher Shop chịu
 	ShippingFee               float64 `json:"shipping_fee" binding:"required"`   // Phí ship khách trả cho đơn này
 	ShopShippingDiscount      float64 `json:"shop_shipping_discount"`            // Ship Shop tài trợ
+	SiteOrderDiscount         float64 `json:"site_order_discount"`               // --- THÊM TRƯỜNG --- Số tiền giảm từ voucher SÀN (tiền hàng) đã được PHÂN BỔ cho đơn hàng shop này
+	SiteShippingDiscount      float64 `json:"site_shipping_discount"`            // --- THÊM TRƯỜNG --- Tiền Sàn hỗ trợ ship (voucher ship) đã được PHÂN BỔ cho đơn hàng shop này
+
 	// --- LOẠI BỎ site_shipping_discount và site_order_discount ---
 	CommissionFee    float64 `json:"commission_fee" binding:"required"`     // Phí hoa hồng Sàn tính (Order Service tính sẵn)
 	NetSettledAmount float64 `json:"net_settled_amount" binding:"required"` // Tiền Shop thực nhận (Order Service tính sẵn)

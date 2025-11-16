@@ -181,26 +181,28 @@ type OrderDetail struct {
 
 // ShopOrderDetail đại diện cho thông tin chi tiết shop order
 type ShopOrderDetail struct {
-	ShopOrderID         string            `json:"shop_order_id"`
-	ShopOrderCode       string            `json:"shop_order_code"`
-	ShopID              string            `json:"shop_id"`
-	Status              string            `json:"status"`
-	Subtotal            float64           `json:"subtotal"`
-	ShippingFee         float64           `json:"shipping_fee"`
-	TotalDiscount       float64           `json:"total_discount"`
-	TotalAmount         float64           `json:"total_amount"`
-	ShopVoucherCode     *string           `json:"shop_voucher_code"`
-	ShopVoucherDiscount float64           `json:"shop_voucher_discount"`
-	ShippingMethod      *string           `json:"shipping_method"`
-	TrackingCode        *string           `json:"tracking_code"`
-	Items               []OrderItemDetail `json:"items"`
-	CreatedAt           string            `json:"created_at"`
-	UpdatedAt           string            `json:"updated_at"`
-	PaidAt              *string           `json:"paid_at"`
-	ProcessingAt        *string           `json:"processing_at"`
-	ShippedAt           *string           `json:"shipped_at"`
-	CompletedAt         *string           `json:"completed_at"`
-	CancelledAt         *string           `json:"cancelled_at"`
+	ShopOrderID          string            `json:"shop_order_id"`
+	ShopOrderCode        string            `json:"shop_order_code"`
+	ShopID               string            `json:"shop_id"`
+	Status               string            `json:"status"`
+	Subtotal             float64           `json:"subtotal"`
+	ShippingFee          float64           `json:"shipping_fee"`
+	TotalDiscount        float64           `json:"total_discount"`
+	TotalAmount          float64           `json:"total_amount"`
+	ShopVoucherCode      *string           `json:"shop_voucher_code"`
+	ShopVoucherDiscount  float64           `json:"shop_voucher_discount"`
+	ShippingMethod       *string           `json:"shipping_method"`
+	TrackingCode         *string           `json:"tracking_code"`
+	SiteOrderDiscount    float64           `json:"site_order_discount"`
+	SiteShippingDiscount float64           `json:"site_shipping_discount"`
+	Items                []OrderItemDetail `json:"items"`
+	CreatedAt            string            `json:"created_at"`
+	UpdatedAt            string            `json:"updated_at"`
+	PaidAt               *string           `json:"paid_at"`
+	ProcessingAt         *string           `json:"processing_at"`
+	ShippedAt            *string           `json:"shipped_at"`
+	CompletedAt          *string           `json:"completed_at"`
+	CancelledAt          *string           `json:"cancelled_at"`
 }
 
 // OrderItemDetail đại diện cho thông tin chi tiết item trong đơn hàng
@@ -212,6 +214,7 @@ type OrderItemDetail struct {
 	OriginalUnitPrice  float64                `json:"original_unit_price"`
 	FinalUnitPrice     float64                `json:"final_unit_price"`
 	TotalPrice         float64                `json:"total_price"`
+	Reviewed           bool                   `json:"reviewed"`
 	ProductName        string                 `json:"product_name"`
 	ProductImage       *string                `json:"product_image"`
 	SkuAttributes      string                 `json:"sku_attributes"`

@@ -91,4 +91,23 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 			vouchers_auth.PUT("/:voucherID", api.updateVoucher())
 		}
 	}
+
+	// =================================================================
+	// COMMENT ENDPOINTS - Đánh giá sản phẩm
+	// =================================================================
+	comments := group.Group("/comments")
+	{
+		// GET /api/v1/comments - Lấy danh sách comment cho sản phẩm (public, không cần auth)
+		comments.GET("", api.listComments())
+		// POST /api/v1/comments/check-reviewed - Check các order items đã review chưa
+		comments.POST("/check-reviewed", api.checkReviewedItems())
+		// POST /api/v1/comments/bulk-stats - Lấy thống kê đánh giá cho nhiều sản phẩm
+		comments.POST("/bulk-stats", api.getBulkProductRatingStats())
+
+		comments_auth := comments.Use(authorization(api.jwt))
+		{
+			// POST /api/v1/comments - Tạo đánh giá sản phẩm (cần auth)
+			comments_auth.POST("", api.createComment())
+		}
+	}
 }

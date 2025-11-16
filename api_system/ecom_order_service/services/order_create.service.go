@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	db "github.com/TranVinhHien/ecom_order_service/db/sqlc"
@@ -50,7 +52,7 @@ func (s *service) CreateOrder(ctx context.Context, userID string, token string, 
 	orderCode := s.generateOrderCode()
 
 	// Bước 6: Tạo các shop orders và tính toán tổng tiền
-	shopOrders, grandTotal, subtotal, totalShippingFee, totalDiscount, voucherTotalSite, voucherShippingSite, err := s.createShopOrdersWithItems(
+	shopOrders, grandTotal, subtotal, totalShippingFee, totalDiscount, voucherTotalSite, voucherShippingSite, voucherTotalDiscount, voucherShippingDiscount, err := s.createShopOrdersWithItems(
 		ctx, userID, orderID, shopItemsMap, productInfoMap, req.VoucherShop, req.VoucherSiteID, req.VoucherShippingID)
 	if err != nil {
 		return nil, err
@@ -189,7 +191,7 @@ func (s *service) CreateOrder(ctx context.Context, userID string, token string, 
 
 		// // // Bước 9: Tạo transaction
 		// res, err := s.apiServer.CreateTransaction(token, server_transaction.InitPaymentParams{
-		params := createInitPaymentParams(orderID, req.PaymentMethod_ID, grandTotal, req.ShippingAddress, req.Items, productInfoMap, shopOrders)
+		params := createInitPaymentParams(orderID, req.PaymentMethod_ID, grandTotal, totalShippingFee, req.ShippingAddress, req.Items, productInfoMap, shopOrders, voucherTotalDiscount, voucherShippingDiscount)
 		// Gọi API CreateTransaction của Transaction Service
 		res, err := s.apiServer.CreateTransaction(token, params)
 		if err != nil {
@@ -260,7 +262,11 @@ func (s *service) CreateOrder(ctx context.Context, userID string, token string, 
 	return response, nil
 }
 
-func createInitPaymentParams(orderID, PaymentMethod_ID string, grandTotal float64, ShippingAddress services.ShippingAddress, OrderItemRequest []services.OrderItemRequest, productInfoMap map[string]*ProductInfo, shopOrders []ShopOrderWithItems) server_transaction.InitPaymentParams {
+func createInitPaymentParams(
+	orderID, PaymentMethod_ID string, grandTotal, totalShippingFee float64, ShippingAddress services.ShippingAddress,
+	OrderItemRequest []services.OrderItemRequest, productInfoMap map[string]*ProductInfo,
+	shopOrders []ShopOrderWithItems,
+	voucherTotalDiscount, voucherShippingDiscount float64) server_transaction.InitPaymentParams {
 	// })
 	addres := ShippingAddress.Address
 	if ShippingAddress.District != nil {
@@ -295,26 +301,36 @@ func createInitPaymentParams(orderID, PaymentMethod_ID string, grandTotal float6
 	// Xây dựng danh sách SettlementDetail từ shopOrders đã tính toán
 	settlementDetails := make([]server_transaction.SettlementDetail, 0, len(shopOrders))
 	// Các biến để tổng hợp chi phí Sàn
-	var totalSiteOrderVoucherDiscount float64 = 0.0
+	var totalSiteOrderVoucherDiscount float64 = voucherTotalDiscount
 	var totalSitePromotionDiscount float64 = 0.0
-	var totalSiteShippingDiscount float64 = 0.0
-	var totalSiteFundedProductDiscount float64 = 0.0
+	var totalSiteShippingDiscount float64 = voucherShippingDiscount
+	var totalSiteFundedProductDiscount float64 = voucherTotalDiscount + voucherShippingDiscount
 
 	for _, shopOrder := range shopOrders {
 		// TODO: Bổ sung logic tính toán các trường sau trong createShopOrdersWithItems
 		// và trả về trong struct ShopOrderWithItems
-		var shopFundedProductDiscount float64 = 0.0 // Ví dụ: shopOrder.ShopFundedProductDiscount
-		var siteFundedProductDiscount float64 = 0.0 // Ví dụ: shopOrder.SiteFundedProductDiscount
-		var shopVoucherDiscount float64 = 0.0       // Ví dụ: shopOrder.ShopVoucherDiscount
-		var shopShippingDiscount float64 = 0.0      // Ví dụ: shopOrder.ShopShippingDiscount
-		var commissionFee float64 = 0.0             // Ví dụ: shopOrder.CommissionFee (tính dựa trên giá gốc)
-		var netSettledAmount float64 = 0.0          // Ví dụ: shopOrder.NetSettledAmount (tính theo công thức)
-		var orderSubtotal float64 = 0.0             // Ví dụ: shopOrder.OriginalSubtotal (giá gốc trước KM)
 
-		// Tạm tính lại netSettledAmount dựa trên giả định các trường kia = 0
-		// Cần thay thế bằng công thức tính chính xác khi có đủ dữ liệu
-		orderSubtotal = shopOrder.Subtotal  // Tạm coi subtotal đã tính là giá gốc
+		// hiện tại không có đợt giảm giá
+		var shopFundedProductDiscount float64 = 0 // giá tiền giảm giá của sản phẩm trong đợt giảm giá
+		var siteFundedProductDiscount float64 = 0 // tiền sàn trong đợt giảm giá
+
+		var shopVoucherDiscount float64 = 0.0 // mã giảm giá shop
+		shopVoucherDiscount = shopOrder.TotalDiscount
+
+		var shopShippingDiscount float64 = 0.0 // Voucher ship shop(hiện tại ko hỗ trợ)
+
+		var orderSubtotal float64 = 0.0    // giá gốc của đơn
+		orderSubtotal = shopOrder.Subtotal // Tạm coi subtotal đã tính là giá gốc
+
+		var commissionFee float64 = 0.0     // hoa hồng trên giá gốc
 		commissionFee = orderSubtotal * 0.1 // Tạm tính hoa hồng 10%
+
+		var siteOrderDiscount float64 = 0.0                                                                                  // voucher của sàn cho order tổng chia riêng cho shop để giảm giá. Tính với công thức  tổng tiền voucher *( tổng tiền đơn hàng shop / tổng tiền đơn hàng tất cả shop)
+		var siteShippingDiscount float64 = 0.0                                                                               // voucher ship sàn giảm cho shop
+		siteOrderDiscount = totalSiteOrderVoucherDiscount * ((shopOrder.TotalAmount - shopOrder.TotalDiscount) / grandTotal) // phải lấy giá sản phẩm sau khi giảm giá của shop
+		siteShippingDiscount = totalSiteShippingDiscount * (shopOrder.ShippingFee / totalShippingFee)                        // phải lấy giá sản phẩm sau khi giảm giá của shop
+
+		var netSettledAmount float64 = 0.0 // tiền gốc người bán nhận đc
 		netSettledAmount = orderSubtotal - shopFundedProductDiscount + siteFundedProductDiscount - shopVoucherDiscount - shopShippingDiscount - commissionFee
 
 		settlementDetails = append(settlementDetails, server_transaction.SettlementDetail{
@@ -324,14 +340,13 @@ func createInitPaymentParams(orderID, PaymentMethod_ID string, grandTotal float6
 			SiteFundedProductDiscount: siteFundedProductDiscount, // Cần giá trị thực tế
 			ShopVoucherDiscount:       shopVoucherDiscount,       // Cần giá trị thực tế
 			ShippingFee:               shopOrder.ShippingFee,
+			SiteOrderDiscount:         siteOrderDiscount, // Cần giá trị thực tếq
+			SiteShippingDiscount:      siteShippingDiscount,
 			ShopShippingDiscount:      shopShippingDiscount, // Cần giá trị thực tế
 			CommissionFee:             commissionFee,        // Cần giá trị thực tế
 			NetSettledAmount:          netSettledAmount,     // Cần giá trị thực tế
 		})
 
-		// TODO: Tổng hợp các chi phí Sàn chịu từ shopOrder vào các biến total...
-		// Ví dụ:
-		// totalSiteFundedProductDiscount += siteFundedProductDiscount
 	}
 
 	// Tạo params cho CreateTransaction
@@ -437,7 +452,7 @@ func (s *service) createShopOrdersWithItems(
 ) (
 	orderShopAndItem []ShopOrderWithItems,
 	grandTotal float64, subtotal float64, totalShippingFee float64, totalDiscount float64,
-	voucherTotalSite *db.Vouchers, voucherShippingSite *db.Vouchers,
+	voucherTotalSite *db.Vouchers, voucherShippingSite *db.Vouchers, voucherTotalDiscount, voucherShippingDiscount float64,
 	errors *assets_services.ServiceError) {
 	shopOrders := make([]ShopOrderWithItems, 0)
 	voucherShopInfo := map[string]*db.Vouchers{}
@@ -446,7 +461,7 @@ func (s *service) createShopOrdersWithItems(
 		for _, vs := range voucherShop {
 			valid, reason, voucherShopData := s.checkSingleVoucher(ctx, userID, vs.VoucherID)
 			if !valid {
-				return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(400, fmt.Errorf("voucher shop không hợp lệ: %s", reason))
+				return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(400, fmt.Errorf("voucher shop không hợp lệ: %s", reason))
 			}
 			voucherShopInfo[vs.ShopID] = &voucherShopData
 		}
@@ -496,24 +511,27 @@ func (s *service) createShopOrdersWithItems(
 			shopSubtotal += itemTotal
 		}
 
-		shopOrder.Subtotal = shopSubtotal
+		shopOrder.Subtotal = shopSubtotal // tổng tiền chay 1 đơn hàng
 		// check voucher shop
 		voucher := voucherShopInfo[shopID]
 		if voucher != nil {
 			min, err := assets_services.ConvertStringToFloat(voucher.MinPurchaseAmount)
 			if err != nil {
-				return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(500, fmt.Errorf("lỗi định dạng giá trị tối thiểu của voucher: %w", err))
+				return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(500, fmt.Errorf("lỗi định dạng giá trị tối thiểu của voucher: %w", err))
 			}
 			if shopSubtotal < min {
-				return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(400, fmt.Errorf("voucher shop không áp dụng cho shop %s: giá trị đơn hàng tối thiểu là %.2f", shopID, min))
+				return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(400, fmt.Errorf("voucher shop không áp dụng cho shop %s: giá trị đơn hàng tối thiểu là %.2f", shopID, min))
 			}
 			// tính toán discount
 			discount := 0.0
 			// chỉ áp dụng voucher shop là giảm tiền trên đơn
 			if voucher.AppliesToType == db.VouchersAppliesToTypeORDERTOTAL {
 				discount, err = countDiscountAmount(*voucher, shopSubtotal)
+				if err != nil {
+					return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(500, fmt.Errorf("lỗi khi tính toán giảm giá voucher shop cho shop %s: %w", shopID, err))
+				}
 			}
-			shopOrder.TotalDiscount += discount
+			shopOrder.TotalDiscount = discount
 			shopOrder.DiscountCode = voucher.VoucherCode
 		}
 
@@ -532,28 +550,29 @@ func (s *service) createShopOrdersWithItems(
 	if voucherTotalSiteID != nil {
 		valid, reason, voucherData := s.checkSingleVoucher(ctx, userID, *voucherTotalSiteID)
 		if !valid {
-			return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(400, fmt.Errorf("voucher tổng không hợp lệ: %s", reason))
+			return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(400, fmt.Errorf("voucher tổng không hợp lệ: %s", reason))
 		}
 		// tính toán giảm giá
 		min, err := assets_services.ConvertStringToFloat(voucherData.MinPurchaseAmount)
 		if err != nil {
-			return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(500, fmt.Errorf("lỗi định dạng giá trị tối thiểu của voucher: %w", err))
+			return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(500, fmt.Errorf("lỗi định dạng giá trị tối thiểu của voucher: %w", err))
 		}
 		if subtotal < min {
-			return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(400, fmt.Errorf("voucher tổng không áp dụng: giá trị đơn hàng tối thiểu là %.2f", min))
+			return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(400, fmt.Errorf("voucher tổng không áp dụng: giá trị đơn hàng tối thiểu là %.2f", min))
 		}
 		// tính toán discount
 		discount := 0.0
 		if voucherData.AppliesToType == db.VouchersAppliesToTypeORDERTOTAL {
 			discount, err = countDiscountAmount(voucherData, subtotal)
 			if err != nil {
-				return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(500, fmt.Errorf("lỗi khi tính toán giảm giá voucher tổng: %w", err))
+				return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(500, fmt.Errorf("lỗi khi tính toán giảm giá voucher tổng: %w", err))
 			}
 			// TÍNH TOÁN TỔNG TIỀN GIẢM TỔNG CỘNG VÀO GIÁ TRỊ ĐƠN HÀNG
 			totalDiscount += discount
 			voucherTotalSite = &voucherData
+			voucherTotalDiscount = discount
 		} else {
-			return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(400, fmt.Errorf("loại voucher tổng không được hỗ trợ"))
+			return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(400, fmt.Errorf("loại voucher tổng không được hỗ trợ"))
 		}
 	}
 
@@ -561,34 +580,36 @@ func (s *service) createShopOrdersWithItems(
 	if voucherShippingSiteID != nil {
 		valid, reason, voucherData := s.checkSingleVoucher(ctx, userID, *voucherShippingSiteID)
 		if !valid {
-			return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(400, fmt.Errorf("voucher tổng không hợp lệ: %s", reason))
+			return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(400, fmt.Errorf("voucher tổng không hợp lệ: %s", reason))
 		}
 		// tính toán giảm giá
 		min, err := assets_services.ConvertStringToFloat(voucherData.MinPurchaseAmount)
 		if err != nil {
-			return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(500, fmt.Errorf("lỗi định dạng giá trị tối thiểu của voucher: %w", err))
+			return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(500, fmt.Errorf("lỗi định dạng giá trị tối thiểu của voucher: %w", err))
 		}
 		if subtotal < min {
-			return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(400, fmt.Errorf("voucher tổng không áp dụng: giá trị đơn hàng tối thiểu là %.2f", min))
+			return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(400, fmt.Errorf("voucher tổng không áp dụng: giá trị đơn hàng tối thiểu là %.2f", min))
 		}
 		// tính toán discount
 		discount := 0.0
 		if voucherData.AppliesToType == db.VouchersAppliesToTypeSHIPPINGFEE {
 			discount, err = countDiscountAmount(voucherData, subtotal)
 			if err != nil {
-				return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(500, fmt.Errorf("lỗi khi tính toán giảm giá voucher giao hàng: %w", err))
+				return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(500, fmt.Errorf("lỗi khi tính toán giảm giá voucher giao hàng: %w", err))
 			}
 			// tính giảm giá cho voucher giao hàng cộng vào tổng giảm giá
 			totalDiscount += discount
+			voucherShippingDiscount = discount
 			voucherShippingSite = &voucherData
 		} else {
-			return nil, 0, 0, 0, 0, nil, nil, assets_services.NewError(400, fmt.Errorf("loại voucher giao hàng không được hỗ trợ"))
+			return nil, 0, 0, 0, 0, nil, nil, 0, 0, assets_services.NewError(400, fmt.Errorf("loại voucher giao hàng không được hỗ trợ"))
 		}
 	}
 
 	grandTotal = subtotal + totalShippingFee - totalDiscount
+	grandTotal = math.Ceil(grandTotal) // Làm tròn lên
 
-	return shopOrders, grandTotal, subtotal, totalShippingFee, totalDiscount, voucherTotalSite, voucherShippingSite, nil
+	return shopOrders, grandTotal, subtotal, totalShippingFee, totalDiscount, voucherTotalSite, voucherShippingSite, voucherTotalDiscount, voucherShippingDiscount, nil
 }
 
 func countDiscountAmount(voucher db.Vouchers, total float64) (discount float64, err error) {
@@ -652,7 +673,7 @@ func (s *service) reserveStockForOrder(ctx context.Context, token string, reserv
 	if res.Code != 200 {
 		return &assets_services.ServiceError{
 			Code: res.Code,
-			Err:  fmt.Errorf(res.Message),
+			Err:  errors.New(res.Message),
 		}
 	}
 	return nil
@@ -677,7 +698,7 @@ func (s *service) releaseStockForOrder(ctx context.Context, token string, reserv
 	if res.Code != 200 {
 		return &assets_services.ServiceError{
 			Code: res.Code,
-			Err:  fmt.Errorf(res.Message),
+			Err:  errors.New(res.Message),
 		}
 	}
 	return nil

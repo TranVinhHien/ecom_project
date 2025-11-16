@@ -41,7 +41,7 @@ export type OrderStatus =
   | 'PROCESSING' 
   | 'SHIPPED' 
   | 'COMPLETED' 
-  | 'CANCELED' 
+  | 'CANCELLED' 
   | 'REFUNDED';
 
 export interface OrderItem {
@@ -69,6 +69,8 @@ export interface ShopOrder {
   total_amount: number;
   shop_voucher_code: string;
   shop_voucher_discount: number;
+  site_order_discount: number; // New field
+  site_shipping_discount: number; // New field
   shipping_method: string;
   tracking_code: string;
   items: OrderItem[];
@@ -87,14 +89,20 @@ export interface OrderListParams {
   status?: OrderStatus;
 }
 
+// New API structure - Nested order with shop order
+export interface OrderWithShop {
+  order: OrderDetail;
+  order_shop: ShopOrder;
+}
+
 export interface OrderListResponse {
   code: number;
   message: string;
   status: string;
   result: {
     currentPage: number;
-    data: ShopOrder[];
-    limit: number;
+    data: OrderWithShop[];
+    pageSize: number;
     totalElements: number;
     totalPages: number;
   };
@@ -123,6 +131,8 @@ export interface OrderDetail {
   note: string;
   created_at: string;
   updated_at: string;
+  site_order_voucher_code: string;
+  site_shipping_voucher_code: number;
   paid_at: string | null;
   processing_at: string | null;
   shipped_at: string | null;

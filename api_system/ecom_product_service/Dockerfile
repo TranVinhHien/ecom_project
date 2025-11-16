@@ -1,6 +1,10 @@
 # Build stage - sử dụng Go 1.24 (theo yêu cầu của go.mod)
 FROM golang:1.24-alpine AS builder
 
+# thêm timezone 
+RUN apk add --no-cache tzdata
+
+
 WORKDIR /app
 
 RUN apk add --no-cache git ca-certificates tzdata
@@ -15,6 +19,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -o main main.go
 
 FROM alpine:3.20
+# Copy timezone data từ builder
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 WORKDIR /app
 

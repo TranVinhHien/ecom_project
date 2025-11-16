@@ -34,3 +34,18 @@ type Vouchers interface {
 	// Customer endpoint
 	ListVouchersForUser(ctx context.Context, userID string, filter services.VoucherFilterRequest) (map[string]interface{}, *assets_services.ServiceError)
 }
+
+// Comments defines comment-related use cases
+type Comments interface {
+	// Create a new comment/review
+	CreateComment(ctx context.Context, userID string, req services.CreateCommentRequest) *assets_services.ServiceError
+
+	// List comments for a product with pagination
+	ListComments(ctx context.Context, req services.ListCommentsRequest) (map[string]interface{}, *assets_services.ServiceError)
+
+	// Check which order items have been reviewed
+	CheckReviewedItems(ctx context.Context, req services.CheckReviewedItemsRequest) (*services.CheckReviewedItemsResponse, *assets_services.ServiceError)
+
+	// Get bulk product rating stats for multiple products
+	GetBulkProductRatingStats(ctx context.Context, req services.GetBulkProductRatingStatsRequest) (map[string]interface{}, *assets_services.ServiceError)
+}

@@ -189,18 +189,18 @@ export default function CartPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Tạm tính</span>
+                  <span>Tạm tính(chưa tính tiền ship)</span>
                   <span>{formatPrice(getTotalPrice())}</span>
                 </div>
-                <div className="flex justify-between text-sm">
+                {/* <div className="flex justify-between text-sm">
                   <span>Phí vận chuyển</span>
-                  <span className="text-green-600">Miễn phí</span>
-                </div>
+                  <span className="text-black-600">30.000đ</span>
+                </div> */}
                 <Separator />
                 <div className="flex justify-between text-lg font-bold">
                   <span>Tổng cộng</span>
                   <span className="text-[hsl(var(--primary))]">
-                    {formatPrice(getTotalPrice())}
+                    {formatPrice(getTotalPrice() )}
                   </span>
                 </div>
               </div>

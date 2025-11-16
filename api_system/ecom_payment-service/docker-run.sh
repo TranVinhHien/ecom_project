@@ -44,7 +44,6 @@ fi
 sudo docker run -d \
     --name ${CONTAINER_NAME} \
     --env-file .env.docker \
-    --network e-commerce-network \
     -p 9003:9003 \
     --restart unless-stopped \
     ${IMAGE_NAME}:latest

@@ -19,6 +19,11 @@ export interface ProductSummary {
   delete_status: string;
   create_date: string;
   update_date: string;
+  rating:{
+product_id:string;
+total_reviews:number;
+average_rating:number;
+  };
 }
 
 export interface PaginatedProductsResponse {

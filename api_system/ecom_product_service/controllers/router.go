@@ -40,7 +40,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 		product.GET("/getallproductid", api.getAllProductID())
 		product.GET("/get_products_detail_for_search", api.getListProductWithIDs())
 		// chỉ cho phép shop mới được tạo/sửa sản phẩm
-		product_auth := product.Group("").Use(authorization(api.jwt)).Use(checkRole("SELLER"))
+		product_auth := product.Group("").Use(authorization(api.jwt)).Use(checkRole("ROLE_SELLER"))
 		{
 			product_auth.POST("/create", api.createProduct())
 			product_auth.PUT("/update/:id", api.updateProduct())

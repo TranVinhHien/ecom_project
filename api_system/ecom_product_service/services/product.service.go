@@ -62,7 +62,55 @@ func (s *service) GetAllProductSimple(ctx context.Context, query services.QueryF
 		return nil, assets_services.NewError(400, fmt.Errorf("không thể đếm tổng số sản phẩm. Lỗi: %v", err))
 	}
 
-	result := assets_services.NormalizeListSQLNulls(product_spu, "data")
+	// Lấy danh sách product_id từ kết quả
+	productIDs := make([]string, len(product_spu))
+	for i, product := range product_spu {
+		productIDs[i] = product.ID
+	}
+
+	// Gọi API để lấy thông tin đánh giá cho tất cả sản phẩm
+	ratingStats := make(map[string]services.ProductRating)
+	if len(productIDs) > 0 {
+		stats, err := s.apiServer.GetBulkProductRatingStats(productIDs)
+		if err != nil {
+			//log.Printf("[GetAllProductSimple] CẢNH BÁO: Không thể lấy thông tin đánh giá. Chi tiết: %v", err)
+			// Không return error, chỉ log warning và tiếp tục với dữ liệu rỗng
+		} else {
+			// Convert sang ProductRating
+			for productID, stat := range stats {
+				ratingStats[productID] = services.ProductRating{
+					ProductID:     stat.ProductID,
+					TotalReviews:  stat.TotalReviews,
+					AverageRating: stat.AverageRating,
+				}
+			}
+		}
+	}
+
+	// Tạo slice mới kết hợp product và rating
+	productsWithRating := make([]interface{}, len(product_spu))
+	for i, product := range product_spu {
+		// Convert product sang map
+		productMap := assets_services.NormalizeToInterface(product)
+
+		// Thêm rating vào product
+		if rating, exists := ratingStats[product.ID]; exists {
+			productMap.(map[string]interface{})["rating"] = rating
+		} else {
+			// Nếu không có rating, set giá trị mặc định
+			productMap.(map[string]interface{})["rating"] = services.ProductRating{
+				ProductID:     product.ID,
+				TotalReviews:  0,
+				AverageRating: 0.0,
+			}
+		}
+
+		productsWithRating[i] = productMap
+	}
+
+	// Tạo result với data đã có rating
+	result := make(map[string]interface{})
+	result["data"] = productsWithRating
 	totalPage := int64(math.Ceil(float64(totalElements) / float64(query.PageSize)))
 	result["currentPage"] = query.Page
 	result["totalPages"] = totalPage

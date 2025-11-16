@@ -17,11 +17,11 @@ CREATE TABLE `product_comment` (
   `rating` TINYINT NOT NULL COMMENT 'Điểm đánh giá (1-5 sao)',
   `title` NVARCHAR(255) DEFAULT NULL COMMENT 'Tiêu đề của đánh giá',
   `content` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'Nội dung chi tiết của đánh giá',
-  `media` JSON DEFAULT NULL COMMENT 'Mảng JSON chứa URLs hình ảnh/video',
+  `media` TEXT  COMMENT 'Mảng JSON chứa URLs hình ảnh/video',
   
   -- === Quản lý & Phản hồi ===
   `parent_id` CHAR(36) DEFAULT NULL COMMENT 'FK tự tham chiếu (product_comment.id) cho phép Shop/Admin trả lời',
-
+  
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   

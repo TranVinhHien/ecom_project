@@ -16,6 +16,7 @@ import {
   OrderDetailResponse
 } from "@/types/order.types";
 import { VoucherApiResponse } from "@/types/voucher.types";
+import API from "@/assets/configs/api";
 
 // ================ CATEGORIES ================
 
@@ -28,7 +29,7 @@ export const useGetCategories = () => {
     queryKey: ['categories'],
     queryFn: async () => {
       const response = await apiClient.get<CategoryApiResponse>('/categories/get',{
-                customBaseURL:process.env.NEXT_PUBLIC_API_GATEWAY_URL
+                customBaseURL:API.base_product
       });
       return response.data.result.categories;
     },
@@ -62,7 +63,7 @@ export const useGetProducts = (params: ProductListParams) => {
 
       const response = await apiClient.get<PaginatedProductsResponse>('/product/getall', {
         params: cleanParams,
-        customBaseURL:process.env.NEXT_PUBLIC_API_GATEWAY_URL
+        customBaseURL:API.base_product
 
       },);
       return response.data.result;
@@ -107,7 +108,7 @@ export const useCreateOrder = () => {
 
 /**
  * Hook để lấy danh sách đơn hàng
- * GET /orders
+ * GET /orders/search/detail
  */
 export const useGetOrders = (params: OrderListParams) => {
   return useQuery<OrderListResponse['result'], Error>({
@@ -115,12 +116,12 @@ export const useGetOrders = (params: OrderListParams) => {
     queryFn: async () => {
       const cleanParams: Record<string, any> = {
         page: params.page || 1,
-        limit: params.limit || 10,
+        page_size: params.limit || 10,
       };
 
       if (params.status) cleanParams.status = params.status;
 
-      const response = await apiOrderClient.get<OrderListResponse>('/orders', {
+      const response = await apiOrderClient.get<OrderListResponse>('/orders/search/detail', {
         params: cleanParams,
       });
       return response.data.result;
@@ -131,7 +132,7 @@ export const useGetOrders = (params: OrderListParams) => {
 
 /**
  * Hook để lấy danh sách đơn hàng với infinite scroll
- * GET /orders
+ * GET /orders/search/detail
  */
 export const useGetOrdersInfinite = (params: Omit<OrderListParams, 'page'>) => {
   return useInfiniteQuery<OrderListResponse['result'], Error>({
@@ -139,12 +140,12 @@ export const useGetOrdersInfinite = (params: Omit<OrderListParams, 'page'>) => {
     queryFn: async ({ pageParam = 1 }) => {
       const cleanParams: Record<string, any> = {
         page: pageParam,
-        limit: params.limit || 10,
+        page_size: params.limit || 10,
       };
 
       if (params.status) cleanParams.status = params.status;
 
-      const response = await apiOrderClient.get<OrderListResponse>('/orders', {
+      const response = await apiOrderClient.get<OrderListResponse>('/orders/search/detail', {
         params: cleanParams,
       });
       return response.data.result;

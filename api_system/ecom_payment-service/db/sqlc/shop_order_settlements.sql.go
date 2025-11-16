@@ -20,13 +20,15 @@ INSERT INTO shop_order_settlements (
   order_subtotal,
   shop_funded_product_discount,
   site_funded_product_discount,
+  site_order_discount,
+  site_shipping_discount,
   shop_voucher_discount,
   shop_shipping_discount,
   shipping_fee,
   commission_fee,
   net_settled_amount
 ) VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 `
 
@@ -38,6 +40,8 @@ type CreateShopOrderSettlementParams struct {
 	OrderSubtotal             string                     `json:"order_subtotal"`
 	ShopFundedProductDiscount string                     `json:"shop_funded_product_discount"`
 	SiteFundedProductDiscount string                     `json:"site_funded_product_discount"`
+	SiteOrderDiscount         string                     `json:"site_order_discount"`
+	SiteShippingDiscount      string                     `json:"site_shipping_discount"`
 	ShopVoucherDiscount       string                     `json:"shop_voucher_discount"`
 	ShopShippingDiscount      string                     `json:"shop_shipping_discount"`
 	ShippingFee               string                     `json:"shipping_fee"`
@@ -58,6 +62,8 @@ func (q *Queries) CreateShopOrderSettlement(ctx context.Context, arg CreateShopO
 		arg.OrderSubtotal,
 		arg.ShopFundedProductDiscount,
 		arg.SiteFundedProductDiscount,
+		arg.SiteOrderDiscount,
+		arg.SiteShippingDiscount,
 		arg.ShopVoucherDiscount,
 		arg.ShopShippingDiscount,
 		arg.ShippingFee,
@@ -68,7 +74,7 @@ func (q *Queries) CreateShopOrderSettlement(ctx context.Context, arg CreateShopO
 }
 
 const getSettlementByID = `-- name: GetSettlementByID :one
-SELECT id, shop_order_id, order_transaction_id, status, order_subtotal, shop_funded_product_discount, site_funded_product_discount, shop_voucher_discount, shop_shipping_discount, shipping_fee, commission_fee, net_settled_amount, order_completed_at, settled_at FROM shop_order_settlements
+SELECT id, shop_order_id, order_transaction_id, status, order_subtotal, shop_funded_product_discount, site_funded_product_discount, shop_voucher_discount, shop_shipping_discount, site_order_discount, site_shipping_discount, shipping_fee, commission_fee, net_settled_amount, order_completed_at, settled_at FROM shop_order_settlements
 WHERE id = ? LIMIT 1
 `
 
@@ -85,6 +91,8 @@ func (q *Queries) GetSettlementByID(ctx context.Context, id string) (ShopOrderSe
 		&i.SiteFundedProductDiscount,
 		&i.ShopVoucherDiscount,
 		&i.ShopShippingDiscount,
+		&i.SiteOrderDiscount,
+		&i.SiteShippingDiscount,
 		&i.ShippingFee,
 		&i.CommissionFee,
 		&i.NetSettledAmount,
@@ -95,7 +103,7 @@ func (q *Queries) GetSettlementByID(ctx context.Context, id string) (ShopOrderSe
 }
 
 const getSettlementByShopOrderID = `-- name: GetSettlementByShopOrderID :one
-SELECT id, shop_order_id, order_transaction_id, status, order_subtotal, shop_funded_product_discount, site_funded_product_discount, shop_voucher_discount, shop_shipping_discount, shipping_fee, commission_fee, net_settled_amount, order_completed_at, settled_at FROM shop_order_settlements
+SELECT id, shop_order_id, order_transaction_id, status, order_subtotal, shop_funded_product_discount, site_funded_product_discount, shop_voucher_discount, shop_shipping_discount, site_order_discount, site_shipping_discount, shipping_fee, commission_fee, net_settled_amount, order_completed_at, settled_at FROM shop_order_settlements
 WHERE shop_order_id = ? LIMIT 1
 `
 
@@ -113,6 +121,8 @@ func (q *Queries) GetSettlementByShopOrderID(ctx context.Context, shopOrderID st
 		&i.SiteFundedProductDiscount,
 		&i.ShopVoucherDiscount,
 		&i.ShopShippingDiscount,
+		&i.SiteOrderDiscount,
+		&i.SiteShippingDiscount,
 		&i.ShippingFee,
 		&i.CommissionFee,
 		&i.NetSettledAmount,
@@ -123,7 +133,7 @@ func (q *Queries) GetSettlementByShopOrderID(ctx context.Context, shopOrderID st
 }
 
 const listEligibleSettlementsForProcessing = `-- name: ListEligibleSettlementsForProcessing :many
-SELECT id, shop_order_id, order_transaction_id, status, order_subtotal, shop_funded_product_discount, site_funded_product_discount, shop_voucher_discount, shop_shipping_discount, shipping_fee, commission_fee, net_settled_amount, order_completed_at, settled_at FROM shop_order_settlements
+SELECT id, shop_order_id, order_transaction_id, status, order_subtotal, shop_funded_product_discount, site_funded_product_discount, shop_voucher_discount, shop_shipping_discount, site_order_discount, site_shipping_discount, shipping_fee, commission_fee, net_settled_amount, order_completed_at, settled_at FROM shop_order_settlements
 WHERE status = 'FUNDS_HELD' AND order_completed_at IS NOT NULL AND order_completed_at <= ?
 `
 
@@ -148,6 +158,8 @@ func (q *Queries) ListEligibleSettlementsForProcessing(ctx context.Context, orde
 			&i.SiteFundedProductDiscount,
 			&i.ShopVoucherDiscount,
 			&i.ShopShippingDiscount,
+			&i.SiteOrderDiscount,
+			&i.SiteShippingDiscount,
 			&i.ShippingFee,
 			&i.CommissionFee,
 			&i.NetSettledAmount,

@@ -16,23 +16,13 @@ import Image from "next/image";
 import { useCartStore } from "@/store/cartStore";
 import { useToast } from "@/hooks/use-toast";
 import ROUTER from "@/assets/configs/routers";
-
+import {getImageUrl, formatPrice} from "@/assets/helpers/convert_tool";
+import C_ProductSimple from "@/resources/components_thuongdung/product";
 export default function SearchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
   const addToCart = useCartStore((state) => state.addToCart);
-
-  // Helper để xử lý image URL
-  const getImageUrl = (imageUrl: string | null | undefined) => {
-    if (!imageUrl) return "/placeholder.png";
-    // Nếu là URL đầy đủ (http/https) thì giữ nguyên
-    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-      return imageUrl;
-    }
-    // Nếu không có protocol, thêm http:// vào đầu
-    return `http://${imageUrl}`;
-  };
 
   // Lấy params từ URL
   const cate_path = searchParams.get("cate_path") || undefined;
@@ -67,13 +57,6 @@ export default function SearchPage() {
     sort: sortBy === "default" ? undefined : (sortBy as any),
   });
 
-  // Format giá
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("vi-VN", {
-      style: "currency",
-      currency: "VND",
-    }).format(price);
-  };
 
   // Render skeleton khi loading
   if (isLoading) {
@@ -217,69 +200,7 @@ export default function SearchPage() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
             {data.data.map((product) => (
-              <Card
-                key={product.id}
-                className="overflow-hidden hover:shadow-lg transition-shadow duration-300 group flex flex-col h-full"
-              >
-                <Link href={`/product/${product.key}`}>
-                  <div className="relative aspect-square overflow-hidden bg-gray-100">
-                    <Image
-                      src={getImageUrl(product.image)}
-                      alt={product.name}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-300"
-                      unoptimized
-                    />
-                    {/* Wishlist button */}
-                    <button
-                      className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toast({
-                          title: "Đã thêm vào yêu thích",
-                          description: product.name,
-                        });
-                      }}
-                    >
-                      <Heart className="w-4 h-4 text-gray-600" />
-                    </button>
-                  </div>
-                </Link>
-
-                <CardContent className="p-4 flex-1 flex flex-col">
-                  <Link href={`${ROUTER.product}/${product.key}`}>
-                    <h3 className="font-medium text-sm mb-2 line-clamp-2 hover:text-[hsl(var(--primary))] min-h-[40px]">
-                      {product.name}
-                    </h3>
-                  </Link>
-
-                  <div className="flex items-baseline gap-2 mt-auto">
-                    {product.min_price === product.max_price ? (
-                      <span className="text-[hsl(var(--primary))] font-bold text-lg">
-                        {formatPrice(product.min_price)}
-                      </span>
-                    ) : (
-                      <>
-                        <span className="text-[hsl(var(--primary))] font-bold text-lg">
-                          {formatPrice(product.min_price)}
-                        </span>
-                        <span className="text-gray-400 text-sm">
-                          - {formatPrice(product.max_price)}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-
-                <CardFooter className="p-4 pt-0">
-                  <Link href={`${ROUTER.product}/${product.key}`} className="w-full">
-                    <Button className="w-full bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/.9)]">
-                      {/* <ShoppingCart className="w-4 h-4 mr-2" /> */}
-                      Xem chi tiết
-                    </Button>
-                  </Link>
-                </CardFooter>
-              </Card>
+              <C_ProductSimple key={product.id} product={product} />
             ))}
           </div>
 

@@ -18,9 +18,10 @@ type SettlementDetail struct {
 	ShopVoucherDiscount       float64 `json:"shop_voucher_discount"`        // Voucher Shop chịu
 	ShippingFee               float64 `json:"shipping_fee"`                 // Phí ship khách trả cho đơn này
 	ShopShippingDiscount      float64 `json:"shop_shipping_discount"`       // Ship Shop tài trợ
-	// --- LOẠI BỎ site_shipping_discount và site_order_discount ---
-	CommissionFee    float64 `json:"commission_fee"`     // Phí hoa hồng Sàn tính (Order Service tính sẵn)
-	NetSettledAmount float64 `json:"net_settled_amount"` // Tiền Shop thực nhận (Order Service tính sẵn)
+	SiteOrderDiscount         float64 `json:"site_order_discount"`          // --- THÊM TRƯỜNG --- Số tiền giảm từ voucher SÀN (tiền hàng) đã được PHÂN BỔ cho đơn hàng shop này
+	SiteShippingDiscount      float64 `json:"site_shipping_discount"`       // --- THÊM TRƯỜNG --- Tiền Sàn hỗ trợ ship (voucher ship) đã được PHÂN BỔ cho đơn hàng shop này
+	CommissionFee             float64 `json:"commission_fee"`               // Phí hoa hồng Sàn tính (Order Service tính sẵn)
+	NetSettledAmount          float64 `json:"net_settled_amount"`           // Tiền Shop thực nhận (Order Service tính sẵn)
 }
 type InitPaymentParams struct {
 	OrderID         string       `json:"order_id" binding:"required"`

@@ -11,7 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import ProductCarousel from "@/components/ProductCarousel";
 import API from "@/assets/configs/api";
 import { generateComplaintUrl } from "@/lib/complaintUtils";
-import { useRouter } from "@/i18n/routing";
+import { useRouter, usePathname } from "@/i18n/routing";
+import { useChatStore } from "@/store/chatStore";
 
 interface Message {
   id: string;
@@ -54,7 +55,7 @@ export const clearChatHistory = () => {
 };
 
 export default function ChatBox() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, setIsOpen, pendingMessage, productKey, clearPendingMessage } = useChatStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -63,6 +64,7 @@ export default function ChatBox() {
   const { toast } = useToast();
   const isInitialized = useRef(false);
   const router = useRouter();
+  const pathname = usePathname();
   // Load chat history from localStorage on mount
   useEffect(() => {
     if (!isInitialized.current) {
@@ -197,16 +199,35 @@ export default function ChatBox() {
         throw new Error("Token not found");
       }
 
+      // Extract product key from pathname if on product detail page
+      let currentProductKey: string | null = null;
+      if (pathname && pathname.includes('/product/')) {
+        const pathParts = pathname.split('/product/');
+        if (pathParts[1]) {
+          currentProductKey = pathParts[1].split('?')[0]; // Remove query params if any
+        }
+      }
+
+      // Use productKey from store or extract from current pathname
+      const finalProductKey = productKey || currentProductKey;
+
+      const requestBody: any = {
+        message: inputMessage,
+        session_id: sessionId,
+      };
+
+      // Add product_key if available
+      if (finalProductKey) {
+        requestBody.product_key = finalProductKey;
+      }
+
       const response = await fetch(`${API.base_agent}${API.agent.message}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          message: inputMessage,
-          session_id: sessionId,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -271,6 +292,18 @@ export default function ChatBox() {
     setIsOpen(!isOpen);
   };
 
+  // Handle pending message from chatStore
+  useEffect(() => {
+    if (isOpen && pendingMessage && sessionId) {
+      setInputMessage(pendingMessage);
+      clearPendingMessage();
+      // Auto send the message
+      setTimeout(() => {
+        sendMessage();
+      }, 100);
+    }
+  }, [isOpen, pendingMessage, sessionId]);
+
   const handleRating = async (messageId: string, rating: number) => {
     if (!sessionId) return;
 
@@ -294,6 +327,7 @@ export default function ChatBox() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${getCookieValues<string>(ACCESS_TOKEN)}`,
         },
         body: JSON.stringify({
           session_id: sessionId,

@@ -88,7 +88,8 @@ CREATE TABLE `shop_order_settlements` (
   `site_funded_product_discount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00 COMMENT 'Giảm giá SP do Sàn trợ giá (Sàn bù cho Shop)',
   `shop_voucher_discount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00 COMMENT 'Voucher của Shop (Shop chịu)',
   `shop_shipping_discount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00 COMMENT 'Tiền Shop hỗ trợ ship (Shop chịu)',
-
+  `site_order_discount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00 COMMENT 'Số tiền giảm từ voucher SÀN (tiền hàng) đã được PHÂN BỔ cho đơn hàng shop này',
+  `site_shipping_discount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00 COMMENT 'Tiền Sàn hỗ trợ ship (voucher ship) đã được PHÂN BỔ cho đơn hàng shop này',
   `shipping_fee` DECIMAL(15, 2) NOT NULL DEFAULT 0.00 COMMENT 'Phí vận chuyển thực tế khách trả cho gói hàng này (Doanh thu của Sàn)',
 
   -- === Kết quả Quyết toán ===

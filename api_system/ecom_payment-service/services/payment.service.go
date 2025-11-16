@@ -136,6 +136,8 @@ func (s *service) InitPayment(ctx context.Context, userId string, email string, 
 				ShopFundedProductDiscount: fmt.Sprintf("%.2f", item.ShopFundedProductDiscount),
 				SiteFundedProductDiscount: fmt.Sprintf("%.2f", item.SiteFundedProductDiscount),
 				ShopVoucherDiscount:       fmt.Sprintf("%.2f", item.ShopVoucherDiscount),
+				SiteOrderDiscount:         fmt.Sprintf("%.2f", item.SiteOrderDiscount),
+				SiteShippingDiscount:      fmt.Sprintf("%.2f", item.SiteShippingDiscount),
 				ShippingFee:               fmt.Sprintf("%.2f", item.ShippingFee),
 				ShopShippingDiscount:      fmt.Sprintf("%.2f", item.ShopShippingDiscount),
 				CommissionFee:             fmt.Sprintf("%.2f", item.CommissionFee),
@@ -172,7 +174,7 @@ func (s *service) InitPayment(ctx context.Context, userId string, email string, 
 					Email:         email,
 				}
 				payload := createMoMoPayload(s.env, payloadParamsMoMo)
-				defer s.redis.AddTransactionOnline(ctx, userId, payloadParamsMoMo, s.env.OrderDuration)
+				defer s.redis.AddTransactionOnline(ctx, userId, payloadParamsMoMo, s.env.OrderDuration+10*time.Minute) // Lưu thông tin đơn hàng trong Redis để dùng khi callback
 
 				// log đầy đủ thông tin của payload dễ nhìn
 				urlCallBack, errors := callMoMoGetURL(s.env, payload)

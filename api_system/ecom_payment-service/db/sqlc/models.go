@@ -349,6 +349,10 @@ type ShopOrderSettlements struct {
 	ShopVoucherDiscount string `json:"shop_voucher_discount"`
 	// Tiền Shop hỗ trợ ship (Shop chịu)
 	ShopShippingDiscount string `json:"shop_shipping_discount"`
+	// Số tiền giảm từ voucher SÀN (tiền hàng) đã được PHÂN BỔ cho đơn hàng shop này
+	SiteOrderDiscount string `json:"site_order_discount"`
+	// Tiền Sàn hỗ trợ ship (voucher ship) đã được PHÂN BỔ cho đơn hàng shop này
+	SiteShippingDiscount string `json:"site_shipping_discount"`
 	// Phí vận chuyển thực tế khách trả cho gói hàng này (Doanh thu của Sàn)
 	ShippingFee string `json:"shipping_fee"`
 	// Phí hoa hồng Sàn thu (trên giá gốc)

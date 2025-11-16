@@ -377,7 +377,7 @@ func (s *service) checkSingleVoucher(ctx context.Context, userID string, voucher
 		return false, "Lỗi hệ thống", voucher
 	}
 	if count >= int64(voucher.MaxUsagePerUser) {
-		return false, "Bạn đã sử dụng hết số lần cho voucher này.", voucher
+		return false, fmt.Sprintf("Bạn đã sử dụng hết số lần cho voucher %s.", voucher.Name), voucher
 	}
 
 	// 5. If all checks pass, the voucher is valid *for this context*

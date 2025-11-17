@@ -40,4 +40,6 @@ type Products interface {
 }
 type Media interface {
 	RenderImage(ctx context.Context, id string) string
+	UploadMultiMedia(ctx context.Context, user_id string, files []*multipart.FileHeader) (result []string, err *assets_services.ServiceError)
+	DeleteMultiImage(ctx context.Context, user_id string, image_files []string) (err *assets_services.ServiceError)
 }

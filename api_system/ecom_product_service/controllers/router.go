@@ -51,6 +51,14 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 		product.GET("/getsku/:id", api.getSKUProduct())
 		product.GET("/getdetail_with_id/:id", api.getProductWithID())
 	}
-	// group.GET("/.well-known/assetlinks.json", api.renderAndroid())
-	group.GET("/media/:id", api.renderURLLocal())
+	media := group.Group("/media")
+	{
+		media.GET("/:id", api.renderURLLocal())
+		media_auth := media.Group("").Use(authorization(api.jwt))
+		{
+			media_auth.POST("", api.uploadMultiMedia())
+			media_auth.DELETE("", api.deleteMultiImage())
+		}
+	}
+
 }

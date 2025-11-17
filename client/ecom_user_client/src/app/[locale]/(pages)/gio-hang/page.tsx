@@ -225,3 +225,60 @@ export default function CartPage() {
     </div>
   );
 }
+
+
+
+// Bạn thực hiện khi người dùng chưa đăng nhập thì vãn cho người dùng thêm sản phẩm vào giỏ hàng và lưu vào localstoge. Khi người dùng đăng nhập vào thì cập nhật tất cả vào API giỏ hàng. Tôi hiện có tất cả các API sau: http://localhost:8000/api/Cart  lấy danh sách tất cả sản phẩm trong card trả về : {
+//     "result": {
+//         "id": "9acc8610-314d-49cf-973d-31d29f371188",
+//         "items": [
+//             {
+//                 "skuId": "019cbb88-0bfa-4389-a01a-98115af5613f",
+//                 "productName": "Default",
+//                 "price": 3190000,
+//                 "quantity": 1,
+//                 "isSelected": true,
+//                 "shopId": "019cbb88-0bfa-4389-a01a-98115af5613f",
+//                 "addedDate": "2025-11-16T07:16:16.780055Z"
+//             }
+//         ],
+//         "totalItems": 1,
+//         "totalPrice": 3190000,
+//         "selectedTotalPrice": 3190000
+//     },
+//     "messages": [],
+//     "succeeded": true,
+//     "code": 200
+// }.  tiếp theo là API đẩy sản phẩm vào trong giỏ hàng : http://localhost:8000/api/Cart/items . với body là : {
+//   "SkuId": "019cbb88-0bfa-4389-a01a-98115af5613f",
+//   "Quantity": 2
+// // }. két quả thành công cũng trả về tương tự như khi lấy giỏ hàng : {
+//     "result": {
+//         "id": "9acc8610-314d-49cf-973d-31d29f371188",
+//         "items": [
+//             {
+//                 "skuId": "019cbb88-0bfa-4389-a01a-98115af5613f",
+//                 "productName": "Default",
+//                 "price": 3190000,
+//                 "quantity": 3,
+//                 "isSelected": true,
+//                 "shopId": "019cbb88-0bfa-4389-a01a-98115af5613f",
+//                 "addedDate": "2025-11-16T07:18:53.0716205Z"
+//             }
+//         ],
+//         "totalItems": 3,
+//         "totalPrice": 9570000,
+//         "selectedTotalPrice": 9570000
+//     },
+//     "messages": [],
+//     "succeeded": true,
+//     "code": 200
+// }
+// . bạn dùng thông tin mới này để cập nhật lại giỏ hàng trên giao diện người dùng., tiếp theo là API update số lượng của sku với API : http://localhost:8000/api/Cart/items/019cbb88-0bfa-4389-a01a-98115af5613f . Body là : {
+//   "Quantity": 1
+// } .  tiếp theo là API Xóa 1 sản phẩm ra khỏi giỏ hàng : http://localhost:8000/api/Cart/items/8a2b639f-3000-4506-ab33-a6268c7830eb . và cuối cùng là API clear toàn bộ giỏ hàng : http://localhost:8000/api/Cart Bạn phát triển lại phần giỏ hàng để tích hợp kèm vào các API này giúp tôi. Dữ liệu giỏ hàng phải luôn là lấy trực tiếp từ API , hạn chế lưu ở local trừ trường hợp người dùng chưa đăng nhập, còn người dùng có giỏ hàng trc khi đăng nhập thì khi đăng nhập phải thêm giỏ hàng vào. có thêm 1 API hiển thị số lượng sản phẩm trong giỏ hàng là : http://localhost:8000/api/Cart/count . với trả về là  ; {
+//     "result": 3,
+//     "messages": [],
+//     "succeeded": true,
+//     "code": 200
+// }.   

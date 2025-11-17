@@ -14,7 +14,7 @@ import (
 func (api *apiController) createVoucher() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		// Require auth
-		_ = ctx.MustGet(authorizationPayload).(*token.Payload)
+		tokenPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
 
 		var req services.CreateVoucherRequest
 		if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -22,7 +22,7 @@ func (api *apiController) createVoucher() func(ctx *gin.Context) {
 			return
 		}
 
-		if err := api.service.CreateVoucher(ctx, req); err != nil {
+		if err := api.service.CreateVoucher(ctx, req, tokenPayload.UserId, tokenPayload.Scope); err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return
 		}
@@ -35,7 +35,7 @@ func (api *apiController) createVoucher() func(ctx *gin.Context) {
 func (api *apiController) updateVoucher() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		// Require auth
-		_ = ctx.MustGet(authorizationPayload).(*token.Payload)
+		tokenPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
 
 		voucherID := ctx.Param("voucherID")
 		if voucherID == "" {
@@ -49,7 +49,7 @@ func (api *apiController) updateVoucher() func(ctx *gin.Context) {
 			return
 		}
 
-		if err := api.service.UpdateVoucher(ctx, voucherID, req); err != nil {
+		if err := api.service.UpdateVoucher(ctx, voucherID, tokenPayload.UserId, req); err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return
 		}

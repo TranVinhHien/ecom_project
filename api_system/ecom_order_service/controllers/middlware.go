@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"strings"
 
 	assets_api "github.com/TranVinhHien/ecom_order_service/assets/api"
@@ -39,6 +40,29 @@ func authorization(jwt token.Maker) gin.HandlerFunc {
 		}
 		ctx.Set(authorizationPayload, payload)
 		ctx.Set("token", accessToken)
+		ctx.Next()
+	}
+}
+func checkRole(roles []string) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		payload, exists := ctx.Get(authorizationPayload)
+		if !exists {
+			ctx.AbortWithStatusJSON(401, assets_api.ResponseError(401, "token không tồn tại"))
+			return
+		}
+		userPayload := payload.(*token.Payload)
+		// check if scope not in roles
+		check_role := false
+		for _, role := range roles {
+			if userPayload.Scope == role {
+				check_role = true
+				break
+			}
+		}
+		if !check_role {
+			ctx.AbortWithStatusJSON(403, assets_api.ResponseError(403, fmt.Sprintf("không có quyền truy cập, chức năng này chỉ dành cho %s", roles)))
+			return
+		}
 		ctx.Next()
 	}
 }

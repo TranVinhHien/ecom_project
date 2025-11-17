@@ -42,6 +42,8 @@ type Querier interface {
 	CreateVoucher(ctx context.Context, arg CreateVoucherParams) error
 	// Ghi lại lịch sử sử dụng voucher
 	CreateVoucherUsageHistory(ctx context.Context, arg CreateVoucherUsageHistoryParams) error
+	// tạo ra voucher cho riêng người dùng
+	CreateVoucherUser(ctx context.Context, arg CreateVoucherUserParams) error
 	// Giảm số lượng đã dùng (khi hủy đơn)
 	DecrementVoucherUsage(ctx context.Context, id string) (int64, error)
 	// Bỏ lượt "Hữu ích"

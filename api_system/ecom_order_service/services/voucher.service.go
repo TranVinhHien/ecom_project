@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	db "github.com/TranVinhHien/ecom_order_service/db/sqlc"
 	assets_services "github.com/TranVinhHien/ecom_order_service/services/assets"
@@ -13,22 +14,42 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherRequest) *assets_services.ServiceError {
-	// 1. Tạo UUID
+func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherRequest, user_id, user_type string) *assets_services.ServiceError {
+	// 1. Validate toàn bộ dữ liệu đầu vào
+	if err := s.validateCreateVoucherRequest(req); err != nil {
+		return &assets_services.ServiceError{
+			Code: 400,
+			Err:  err,
+		}
+	}
+
+	// 2. Tạo UUID
 	voucherID := uuid.New().String()
 
 	max_discount_amount := 0.0
 	if req.MaxDiscountAmount != nil {
 		max_discount_amount = *req.MaxDiscountAmount
 	}
+	var ownerType db.VouchersOwnerType
+	if user_type == "ROLE_ADMIN" {
+		ownerType = db.VouchersOwnerTypePLATFORM
+	} else if user_type == "ROLE_SELLER" {
+		ownerType = db.VouchersOwnerTypeSHOP
+	} else {
+		return &assets_services.ServiceError{
+			Code: 400,
+			Err:  fmt.Errorf("user_type không hợp lệ để tạo voucher"),
+		}
+	}
+
 	// 3. Map DTO (Request) sang Params (sqlc)
 	// Lưu ý: Giả định sqlc.yaml của bạn map ENUM của MySQL thành String của Go
 	params := db.CreateVoucherParams{
 		ID:                voucherID,
 		Name:              req.Name,
 		VoucherCode:       req.VoucherCode,
-		OwnerType:         db.VouchersOwnerType(req.OwnerType),
-		OwnerID:           req.OwnerID,
+		OwnerType:         ownerType,
+		OwnerID:           user_id,
 		DiscountType:      db.VouchersDiscountType(req.DiscountType),
 		DiscountValue:     fmt.Sprintf("%.2f", req.DiscountValue),
 		MaxDiscountAmount: sql.NullString{String: fmt.Sprintf("%.2f", max_discount_amount), Valid: db.VouchersDiscountType(req.DiscountType) == db.VouchersDiscountTypePERCENTAGE},
@@ -39,7 +60,7 @@ func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherR
 		EndDate:           req.EndDate,
 		TotalQuantity:     req.TotalQuantity,
 		MaxUsagePerUser:   req.MaxUsagePerUser,
-		IsActive:          req.IsActive,
+		IsActive:          true,
 	}
 
 	// 4. Gọi DB
@@ -57,7 +78,7 @@ func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherR
 
 // --- Hàm Sửa Voucher (Partial Update) ---
 
-func (s *service) UpdateVoucher(ctx context.Context, voucherID string, req services.UpdateVoucherRequest) *assets_services.ServiceError {
+func (s *service) UpdateVoucher(ctx context.Context, voucherID string, user_id string, req services.UpdateVoucherRequest) *assets_services.ServiceError {
 	// 1. Map DTO (Request) sang Params (sqlc)
 	// Vì dùng `sqlc.narg`, struct Params của `UpdateVoucher` sẽ dùng `sql.Null*`
 	// Chúng ta chỉ set giá trị `Valid: true` cho những trường KHÔNG PHẢI nil trong request
@@ -65,7 +86,18 @@ func (s *service) UpdateVoucher(ctx context.Context, voucherID string, req servi
 	params := db.UpdateVoucherParams{
 		ID: voucherID,
 	}
-
+	voucher_db, err := s.repository.GetVoucherByID(ctx, voucherID)
+	if err != nil {
+		return &assets_services.ServiceError{
+			Code: 404,
+			Err:  fmt.Errorf("không tìm thấy voucher với ID %s: %w", voucherID, err)}
+	}
+	if voucher_db.OwnerID != user_id {
+		return &assets_services.ServiceError{
+			Code: 403,
+			Err:  fmt.Errorf("bạn không có quyền sửa voucher này"),
+		}
+	}
 	// Ánh xạ các trường string
 	if req.Name != nil {
 		params.Name = sql.NullString{String: *req.Name, Valid: true}
@@ -109,15 +141,13 @@ func (s *service) UpdateVoucher(ctx context.Context, voucherID string, req servi
 	if req.EndDate != nil {
 		params.EndDate = sql.NullTime{Time: *req.EndDate, Valid: true}
 	}
-
-	// Ánh xạ trường bool
 	if req.IsActive != nil {
+
 		params.IsActive = sql.NullBool{Bool: *req.IsActive, Valid: true}
 	}
-
 	// 2. Gọi DB
 	// Nhờ `COALESCE` trong SQL, các trường `Valid: false` (mặc định) sẽ bị bỏ qua
-	err := s.repository.UpdateVoucher(ctx, params)
+	err = s.repository.UpdateVoucher(ctx, params)
 	if err != nil {
 		// Check lỗi (ví dụ: không tìm thấy voucher_id, hoặc duplicate voucher_code mới)
 		return &assets_services.ServiceError{
@@ -572,4 +602,126 @@ func (s *service) checkSingleVoucherTx(ctx context.Context, q db.Querier, userID
 	}
 
 	return true, "OK"
+}
+
+// =================================================================
+// HÀM VALIDATE TẠO VOUCHER
+// =================================================================
+
+// validateCreateVoucherRequest kiểm tra tính hợp lệ của toàn bộ dữ liệu tạo voucher
+func (s *service) validateCreateVoucherRequest(req services.CreateVoucherRequest) error {
+	// 1. Validate Name
+	if req.Name == "" {
+		return fmt.Errorf("tên voucher không được để trống")
+	}
+	if len(req.Name) > 255 {
+		return fmt.Errorf("tên voucher không được vượt quá 255 ký tự")
+	}
+
+	// 2. Validate VoucherCode
+	if req.VoucherCode == "" {
+		return fmt.Errorf("mã voucher không được để trống")
+	}
+	if len(req.VoucherCode) > 50 {
+		return fmt.Errorf("mã voucher không được vượt quá 50 ký tự")
+	}
+
+	// 5. Validate DiscountType
+	validDiscountTypes := map[string]bool{
+		"PERCENTAGE":   true,
+		"FIXED_AMOUNT": true,
+	}
+	if !validDiscountTypes[req.DiscountType] {
+		return fmt.Errorf("discount_type không hợp lệ. Chỉ chấp nhận: PERCENTAGE, FIXED_AMOUNT")
+	}
+
+	// 6. Validate DiscountValue
+	if req.DiscountValue <= 0 {
+		return fmt.Errorf("discount_value phải lớn hơn 0")
+	}
+
+	// Nếu là PERCENTAGE, giá trị phải từ 0-100
+	if req.DiscountType == "PERCENTAGE" {
+		if req.DiscountValue > 100 {
+			return fmt.Errorf("discount_value cho PERCENTAGE không được vượt quá 100")
+		}
+	}
+
+	// 7. Validate MaxDiscountAmount
+	// Nếu discount_type là PERCENTAGE, max_discount_amount BẮT BUỘC phải có
+	if req.DiscountType == "PERCENTAGE" {
+		if req.MaxDiscountAmount == nil {
+			return fmt.Errorf("max_discount_amount bắt buộc phải có khi discount_type là PERCENTAGE")
+		}
+		if *req.MaxDiscountAmount <= 0 {
+			return fmt.Errorf("max_discount_amount phải lớn hơn 0")
+		}
+	}
+
+	// 8. Validate AppliesToType
+	validAppliesToTypes := map[string]bool{
+		"ORDER_TOTAL":  true,
+		"SHIPPING_FEE": true,
+	}
+	if !validAppliesToTypes[req.AppliesToType] {
+		return fmt.Errorf("applies_to_type không hợp lệ. Chỉ chấp nhận: ORDER_TOTAL, SHIPPING_FEE")
+	}
+
+	// 9. Validate MinPurchaseAmount
+	if req.MinPurchaseAmount < 0 {
+		return fmt.Errorf("min_purchase_amount không được âm")
+	}
+
+	// 10. Validate AudienceType
+	validAudienceTypes := map[string]bool{
+		"PUBLIC":   true,
+		"ASSIGNED": true,
+	}
+	if !validAudienceTypes[req.AudienceType] {
+		return fmt.Errorf("audience_type không hợp lệ. Chỉ chấp nhận: PUBLIC, ASSIGNED")
+	}
+
+	// 11. Validate UserUse (danh sách user_id) - BẮT BUỘC khi audience_type là ASSIGNED
+	if req.AudienceType == "ASSIGNED" {
+		if len(req.UserUse) == 0 {
+			return fmt.Errorf("audience_type là ASSIGNED phải có danh sách user_use")
+		}
+		// Kiểm tra các user_id không rỗng
+		for i, userID := range req.UserUse {
+			if userID == "" {
+				return fmt.Errorf("user_use[%d] không được để trống", i)
+			}
+		}
+	}
+
+	// 12. Validate StartDate và EndDate
+	if req.StartDate.IsZero() {
+		return fmt.Errorf("start_date không được để trống")
+	}
+	if req.EndDate.IsZero() {
+		return fmt.Errorf("end_date không được để trống")
+	}
+	if req.EndDate.Before(req.StartDate) {
+		return fmt.Errorf("end_date phải sau start_date")
+	}
+	if req.StartDate.Before(req.StartDate.Add(-24 * 365 * 10 * time.Hour)) {
+		// Kiểm tra start_date không quá xa trong quá khứ (10 năm)
+		return fmt.Errorf("start_date không hợp lệ")
+	}
+
+	// 13. Validate TotalQuantity
+	if req.TotalQuantity <= 0 {
+		return fmt.Errorf("total_quantity phải lớn hơn 0")
+	}
+
+	// 14. Validate MaxUsagePerUser
+	if req.MaxUsagePerUser <= 0 {
+		return fmt.Errorf("max_usage_per_user phải lớn hơn 0")
+	}
+	// max_usage_per_user không được lớn hơn total_quantity
+	if req.MaxUsagePerUser > req.TotalQuantity {
+		return fmt.Errorf("max_usage_per_user không được lớn hơn total_quantity")
+	}
+
+	return nil
 }

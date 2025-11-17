@@ -86,9 +86,12 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 			// GET /api/v1/vouchers - list vouchers available to current user
 			vouchers_auth.GET("", api.listVouchersForUser())
 			// POST /api/v1/vouchers - create a voucher (admin/owner)
-			vouchers_auth.POST("", api.createVoucher())
-			// PUT /api/v1/vouchers/:voucherID - update a voucher
-			vouchers_auth.PUT("/:voucherID", api.updateVoucher())
+			voucher_role := vouchers_auth.Use(checkRole([]string{"ROLE_ADMIN", "ROLE_SELLER"}))
+			{
+				voucher_role.POST("", api.createVoucher())
+				// PUT /api/v1/vouchers/:voucherID - update a voucher
+				voucher_role.PUT("/:voucherID", api.updateVoucher())
+			}
 		}
 	}
 

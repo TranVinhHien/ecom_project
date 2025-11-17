@@ -10,8 +10,6 @@ import "time"
 type CreateVoucherRequest struct {
 	Name              string    `json:"name"`
 	VoucherCode       string    `json:"voucher_code"`
-	OwnerType         string    `json:"owner_type"` // "PLATFORM" or "SHOP"
-	OwnerID           string    `json:"owner_id"`
 	DiscountType      string    `json:"discount_type"` // "PERCENTAGE" or "FIXED_AMOUNT"
 	DiscountValue     float64   `json:"discount_value"`
 	MaxDiscountAmount *float64  `json:"max_discount_amount"` // Dùng con trỏ cho giá trị nullable
@@ -22,7 +20,7 @@ type CreateVoucherRequest struct {
 	EndDate           time.Time `json:"end_date"`
 	TotalQuantity     int32     `json:"total_quantity"`
 	MaxUsagePerUser   int32     `json:"max_usage_per_user"`
-	IsActive          bool      `json:"is_active"`
+	UserUse           []string  `json:"user_use"`
 }
 
 // UpdateVoucherRequest là dữ liệu đầu vào cho việc cập nhật từng phần

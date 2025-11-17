@@ -11,6 +11,7 @@ const API = {
     base_order: "http://172.26.127.95:9002/v1", // Port 9002 - Order Service
     base_transaction: "http://172.26.127.95:9003/v1", // Port 9003 - Transaction Service
     base_analytics: "http://172.26.127.95:9004/v1", // Port 9004 - Analytics & Statistics
+    base_cart_shop: "http://172.26.127.95:8000/api", // Port 8000 - Cart & Shop Service
     
     // Address Service
     address: {
@@ -65,6 +66,16 @@ const API = {
     analytics: {
         chatboxReview: "/public/chatbox/review", // POST - Review chatbox response
         customerComplaint: "/public/customer-support/complaint", // POST - Submit complaint
+    },
+
+    // Cart Service
+    cart: {
+        getCart: "/Cart", // GET - Lấy giỏ hàng
+        addItem: "/Cart/items", // POST - Thêm sản phẩm vào giỏ
+        updateItem: "/Cart/items", // PUT - Cập nhật số lượng (append /{skuId})
+        deleteItem: "/Cart/items", // DELETE - Xóa sản phẩm (append /{skuId})
+        clearCart: "/Cart", // DELETE - Xóa toàn bộ giỏ hàng
+        getCount: "/Cart/count", // GET - Lấy số lượng sản phẩm trong giỏ
     }
 
 }

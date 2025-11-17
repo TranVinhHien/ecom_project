@@ -8,7 +8,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"strings"
 )
 
@@ -23,18 +22,18 @@ INSERT INTO order_items (
 `
 
 type CreateOrderItemParams struct {
-	ID                    string          `json:"id"`
-	ShopOrderID           string          `json:"shop_order_id"`
-	ProductID             string          `json:"product_id"`
-	SkuID                 string          `json:"sku_id"`
-	Quantity              uint32          `json:"quantity"`
-	OriginalUnitPrice     string          `json:"original_unit_price"`
-	FinalUnitPrice        string          `json:"final_unit_price"`
-	TotalPrice            string          `json:"total_price"`
-	PromotionsSnapshot    json.RawMessage `json:"promotions_snapshot"`
-	ProductNameSnapshot   string          `json:"product_name_snapshot"`
-	ProductImageSnapshot  sql.NullString  `json:"product_image_snapshot"`
-	SkuAttributesSnapshot sql.NullString  `json:"sku_attributes_snapshot"`
+	ID                    string         `json:"id"`
+	ShopOrderID           string         `json:"shop_order_id"`
+	ProductID             string         `json:"product_id"`
+	SkuID                 string         `json:"sku_id"`
+	Quantity              uint32         `json:"quantity"`
+	OriginalUnitPrice     string         `json:"original_unit_price"`
+	FinalUnitPrice        string         `json:"final_unit_price"`
+	TotalPrice            string         `json:"total_price"`
+	PromotionsSnapshot    sql.NullString `json:"promotions_snapshot"`
+	ProductNameSnapshot   string         `json:"product_name_snapshot"`
+	ProductImageSnapshot  sql.NullString `json:"product_image_snapshot"`
+	SkuAttributesSnapshot sql.NullString `json:"sku_attributes_snapshot"`
 }
 
 // =================================================================

@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import apiClient from "@/lib/apiClient";
 import apiOrderClient from "@/lib/apiOrderService";
+import apiCartClient from "@/lib/apiCartService";
+import { cookies } from "@/assets/helpers";
+import { ACCESS_TOKEN } from "@/assets/configs/request";
 import { 
   ProductListParams, 
   PaginatedProductsResponse, 
@@ -17,6 +20,12 @@ import {
 } from "@/types/order.types";
 import { VoucherApiResponse } from "@/types/voucher.types";
 import API from "@/assets/configs/api";
+import { 
+  ApiCartResponse, 
+  ApiCartCountResponse, 
+  AddToCartPayload, 
+  UpdateCartItemPayload 
+} from "@/types/cart.types";
 
 // ================ CATEGORIES ================
 
@@ -192,5 +201,137 @@ export const useGetVouchers = () => {
       return response.data.result;
     },
     staleTime: 1000 * 60 * 5, // Cache 5 phút
+  });
+};
+
+// ================ CART ================
+
+/**
+ * Hook để lấy giỏ hàng của người dùng đã đăng nhập
+ * GET /Cart
+ * Nếu không có token (chưa đăng nhập), sẽ skip API call
+ */
+export const useGetCart = () => {
+  // Kiểm tra token trước khi gọi API
+  const hasToken = () => {
+    if (typeof window === 'undefined') return false;
+    return !!cookies.getCookieValues<string>(ACCESS_TOKEN);
+  };
+  
+  return useQuery<ApiCartResponse['result'], Error>({
+    queryKey: ['cart'],
+    queryFn: async () => {
+      const response = await apiCartClient.get<ApiCartResponse>(API.cart.getCart);
+      return response.data.result;
+    },
+    enabled: hasToken(), // Chỉ gọi API nếu có token
+    staleTime: 0, // Không cache, luôn lấy dữ liệu mới
+    retry: false, // Không retry nếu lỗi
+  });
+};
+
+/**
+ * Hook để lấy số lượng sản phẩm trong giỏ hàng
+ * GET /Cart/count
+ * Nếu không có token, sẽ skip API call
+ */
+export const useGetCartCount = () => {
+  // Kiểm tra token trước khi gọi API
+  const hasToken = () => {
+    if (typeof window === 'undefined') return false;
+    return !!cookies.getCookieValues<string>(ACCESS_TOKEN);
+  };
+  
+  return useQuery<number, Error>({
+    queryKey: ['cart-count'],
+    queryFn: async () => {
+      const response = await apiCartClient.get<ApiCartCountResponse>(API.cart.getCount);
+      return response.data.result;
+    },
+    enabled: hasToken(), // Chỉ gọi API nếu có token
+    // staleTime: 1000 * 30, // Cache 30 giây
+    retry: false,
+  });
+};
+
+/**
+ * Hook để thêm sản phẩm vào giỏ hàng
+ * POST /Cart/items
+ */
+export const useAddToCart = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<ApiCartResponse['result'], Error, AddToCartPayload>({
+    mutationFn: async (payload: AddToCartPayload) => {
+      const response = await apiCartClient.post<ApiCartResponse>(API.cart.addItem, payload);
+      return response.data.result;
+    },
+    onSuccess: () => {
+      // Invalidate cart queries để refetch
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+    },
+  });
+};
+
+/**
+ * Hook để cập nhật số lượng sản phẩm trong giỏ
+ * PUT /Cart/items/{skuId}
+ */
+export const useUpdateCartItem = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<ApiCartResponse['result'], Error, { skuId: string; payload: UpdateCartItemPayload }>({
+    mutationFn: async ({ skuId, payload }) => {
+      const response = await apiCartClient.put<ApiCartResponse>(
+        `${API.cart.updateItem}/${skuId}`, 
+        payload
+      );
+      return response.data.result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+    },
+  });
+};
+
+/**
+ * Hook để xóa sản phẩm khỏi giỏ hàng
+ * DELETE /Cart/items/{skuId}
+ */
+export const useDeleteCartItem = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<ApiCartResponse['result'], Error, string>({
+    mutationFn: async (skuId: string) => {
+      const response = await apiCartClient.delete<ApiCartResponse>(
+        `${API.cart.deleteItem}/${skuId}`
+      );
+      return response.data.result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+    },
+  });
+};
+
+/**
+ * Hook để xóa toàn bộ giỏ hàng
+ * DELETE /Cart
+ */
+export const useClearCart = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<ApiCartResponse['result'], Error, void>({
+    mutationFn: async () => {
+      const response = await apiCartClient.delete<ApiCartResponse>(API.cart.clearCart);
+      return response.data.result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+    },
   });
 };

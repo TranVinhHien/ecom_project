@@ -60,7 +60,7 @@ func (s *service) ListUserOrders(ctx context.Context, userID string, query servi
 }
 
 // GetOrderDetail lấy chi tiết đầy đủ của một đơn hàng
-func (s *service) GetOrderDetail(ctx context.Context, userID, orderCode string) (map[string]interface{}, *assets_services.ServiceError) {
+func (s *service) GetOrderDetail(ctx context.Context, userID, user_role, orderCode string) (map[string]interface{}, *assets_services.ServiceError) {
 	// Lấy main order
 	order_shop, err := s.repository.GetShopOrderByID(ctx, orderCode)
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *service) GetOrderDetail(ctx context.Context, userID, orderCode string) 
 		return nil, assets_services.NewError(500, fmt.Errorf("lỗi khi lấy đơn hàng: %w", err))
 	}
 	// Verify order thuộc về user
-	if order.UserID != userID {
+	if order.UserID != userID && user_role == "ROLE_USER" {
 		return nil, assets_services.NewError(403, fmt.Errorf("bạn không có quyền xem đơn hàng này"))
 	}
 
@@ -413,8 +413,8 @@ func (s *service) convertDBShopOrderToService(shopOrder db.ShopOrders, Item []db
 			temp.Reviewed = true
 		}
 		temp.SkuAttributes = item.SkuAttributesSnapshot.String
-		promotions, _ := item.PromotionsSnapshot.MarshalJSON()
-		_ = json.Unmarshal(promotions, &temp.PromotionsSnapshot)
+		promotions := item.PromotionsSnapshot.String
+		_ = json.Unmarshal([]byte(promotions), &temp.PromotionsSnapshot)
 		itemDetails = append(itemDetails, temp)
 	}
 	return services.ShopOrderDetail{

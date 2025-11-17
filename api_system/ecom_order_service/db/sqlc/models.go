@@ -288,7 +288,7 @@ type OrderItems struct {
 	// Tổng tiền cho item này (final_unit_price * quantity)
 	TotalPrice string `json:"total_price"`
 	// Bản ghi nhanh các chương trình khuyến mãi đã áp dụng dạng JSON
-	PromotionsSnapshot json.RawMessage `json:"promotions_snapshot"`
+	PromotionsSnapshot sql.NullString `json:"promotions_snapshot"`
 	// Tên sản phẩm tại thời điểm mua
 	ProductNameSnapshot string `json:"product_name_snapshot"`
 	// URL hình ảnh sản phẩm tại thời điểm mua

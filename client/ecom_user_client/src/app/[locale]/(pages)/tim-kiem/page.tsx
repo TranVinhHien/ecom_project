@@ -13,16 +13,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ShoppingCart, Heart, SlidersHorizontal } from "lucide-react";
 import { Link } from '@/i18n/routing';
 import Image from "next/image";
-import { useCartStore } from "@/store/cartStore";
+import { useCart } from "@/hooks/useCart";
 import { useToast } from "@/hooks/use-toast";
 import ROUTER from "@/assets/configs/routers";
 import {getImageUrl, formatPrice} from "@/assets/helpers/convert_tool";
 import C_ProductSimple from "@/resources/components_thuongdung/product";
+
 export default function SearchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
-  const addToCart = useCartStore((state) => state.addToCart);
+  const { addToCart, isAddingToCart } = useCart();
 
   // Lấy params từ URL
   const cate_path = searchParams.get("cate_path") || undefined;

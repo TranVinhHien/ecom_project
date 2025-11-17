@@ -8,6 +8,7 @@ export interface CheckoutItem {
   name?: string;
   price?: number;
   image?: string;
+  sku_name?: string;
 }
 
 export interface ShippingAddress {
@@ -23,6 +24,11 @@ interface CheckoutStore {
   // Checkout items
   items: CheckoutItem[];
   
+  // Flag để phân biệt nguồn gốc:
+  // - true: Từ giỏ hàng (sau khi thanh toán thành công sẽ xóa khỏi giỏ)
+  // - false: Từ trang chi tiết (Mua ngay - không xóa gì)
+  isFromCart: boolean;
+  
   // Shipping info
   shippingAddress: ShippingAddress | null;
   
@@ -36,7 +42,8 @@ interface CheckoutStore {
   note: string;
   
   // Actions
-  setCheckoutItems: (items: CheckoutItem[]) => void;
+  setCheckoutItems: (items: CheckoutItem[], fromCart?: boolean) => void;
+  setIsFromCart: (isFromCart: boolean) => void;
   setShippingAddress: (address: ShippingAddress) => void;
   setPaymentMethod: (method: string) => void;
   setVouchers: (vouchers: string[]) => void;
@@ -46,12 +53,15 @@ interface CheckoutStore {
 
 export const useCheckoutStore = create<CheckoutStore>((set) => ({
   items: [],
+  isFromCart: false, // Mặc định là không phải từ giỏ hàng
   shippingAddress: null,
   paymentMethod: '',
   vouchers: [],
   note: '',
 
-  setCheckoutItems: (items) => set({ items }),
+  setCheckoutItems: (items, fromCart = false) => set({ items, isFromCart: fromCart }),
+  
+  setIsFromCart: (isFromCart) => set({ isFromCart }),
   
   setShippingAddress: (address) => set({ shippingAddress: address }),
   
@@ -63,6 +73,7 @@ export const useCheckoutStore = create<CheckoutStore>((set) => ({
   
   clearCheckout: () => set({
     items: [],
+    isFromCart: false,
     shippingAddress: null,
     paymentMethod: '',
     vouchers: [],

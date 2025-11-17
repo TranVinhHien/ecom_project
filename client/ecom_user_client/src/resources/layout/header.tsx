@@ -48,6 +48,8 @@ import { useGetCategories } from '@/services/apiService';
 import { useCartStore } from '@/store/cartStore';
 import { Category } from '@/types/category.types';
 import logo from "../../../public/logo_doan.png"
+import { useGetCartCount } from '@/services/apiService';
+
 export default function Header({ onClick }: { onClick: () => void }) {
     const t = useTranslations("System")
     const locale = useLocale();
@@ -59,14 +61,19 @@ export default function Header({ onClick }: { onClick: () => void }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isHydrated, setIsHydrated] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [info, setInfo] = useState<UserLoginType | null>(null);
 
     // Sử dụng React Query để lấy categories
     const { data: categories = [], isLoading: categoriesLoading } = useGetCategories();
     
-    // Lấy số lượng sản phẩm trong giỏ hàng từ Zustand (sau khi hydrated)
-    const cartItemsCount = useCartStore((state) => state.getTotalItems());
+    // Lấy số lượng sản phẩm trong giỏ hàng
+    // Nếu đã đăng nhập: lấy từ API
+    // Nếu chưa đăng nhập: lấy từ localStorage
+    const localCartItemsCount = useCartStore((state) => state.getTotalItems());
+    const { data: apiCartCount, isLoading: apiCartLoading } = useGetCartCount();
     
-    const [info, setInfo] = useState<UserLoginType | null>(null)
+    // Determine cart count based on login status
+    const cartItemsCount = isHydrated && info ? (apiCartCount || 0) : localCartItemsCount;
 
     // Hydrate cart store
     useEffect(() => {
@@ -262,6 +269,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                             <Link href={ROUTER.auth.login}>
                                 {t('dang-nhap')}
                             </Link>
+                            
                         </Button>
                     ) : (
                         <DropdownMenu>
@@ -509,8 +517,11 @@ export default function Header({ onClick }: { onClick: () => void }) {
                     </div>
 
                     {/* Right: Actions */}
+                    
                     <div className="flex items-center gap-1 md:gap-2">
+                                  
                         {/* Desktop Settings */}
+                        
                         <DropdownMenu open={openSettings} onOpenChange={setOpenSettings}>
                             <DropdownMenuTrigger asChild className="hidden lg:flex">
                                 <Button variant="ghost" size="icon">
@@ -542,7 +553,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                 </DropdownMenuGroup>
                             </DropdownMenuContent>
                         </DropdownMenu>
-
+                        
                         {/* Notifications & Cart - Only show when logged in */}
                         {info && (
                             <>

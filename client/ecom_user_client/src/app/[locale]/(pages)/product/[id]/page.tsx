@@ -10,7 +10,7 @@ import apiClient from '@/lib/apiClient';
 import { Loading } from "@/components/ui/loading";
 import { cn } from '@/lib/utils';
 import { ProductDetailApiResponse, ProductSKU, ProductOptionValue } from '@/types/product.types';
-import { useCartStore } from '@/store/cartStore';
+import { useCart } from '@/hooks/useCart';
 import { useCheckoutStore } from '@/store/checkoutStore';
 import ROUTER from '@/assets/configs/routers';
 import API from '@/assets/configs/api';
@@ -160,7 +160,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   
   const t = useTranslations("System");
   const router = useRouter();
-  const { addToCart } = useCartStore();
+  const { addToCart: addToCartAction, isAddingToCart } = useCart();
   const { setCheckoutItems } = useCheckoutStore();
   const { openChatWithMessage } = useChatStore();
 
@@ -279,7 +279,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   }, [images, product]);
 
   // Handle Add to Cart
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!selectedSku || !product) {
       alert(t("vui_long_chon_day_du_thuoc_tinh"));
       return;
@@ -301,17 +301,22 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       return `${key}: ${optionValue?.value || ''}`;
     }).join(', ');
 
-    addToCart({
+    // Sử dụng useCart hook - tự động xử lý API hoặc localStorage
+    const success = await addToCartAction({
       sku_id: selectedSku.id,
       shop_id: product.shop_id,
       name: `${product.name} (${selectedOptionsText})`,
       image: product.image,
       price: selectedSku.price,
       quantity: quantity,
-      sku_name:selectedSku.sku_name,
+      sku_name: selectedSku.sku_name,
+      isSelected: true,
     });
 
-    alert(t("them_vao_gio_hang_thanh_cong"));
+    if (success) {
+      // Toast đã được hiển thị trong useCart hook
+      // Không cần alert ở đây nữa
+    }
   };
 
   // Handle Ask AI for Product Suggestion
@@ -345,7 +350,8 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       return `${key}: ${optionValue?.value || ''}`;
     }).join(', ');
 
-    // Set checkout items in Zustand store
+    // ❌ KHÔNG ĐÁNH DẤU: Items này KHÔNG TỪ GIỎ HÀNG (Mua ngay - không xóa gì)
+    // Set checkout items in Zustand store với flag isFromCart = false
     setCheckoutItems([{
       sku_id: selectedSku.id,
       shop_id: product.shop_id,
@@ -354,7 +360,8 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       name: `${product.name} (${selectedOptionsText})`,
       price: selectedSku.price,
       image: product.image,
-    }]);
+      sku_name: selectedSku.sku_name,
+    }], false); // ✅ false = KHÔNG phải từ giỏ hàng
 
     router.push(ROUTER.thanhtoan);
   };
@@ -507,10 +514,10 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               variant="outline"
               className="flex-1"
               onClick={handleAddToCart}
-              disabled={!selectedSku || selectedSku.quantity === 0}
+              disabled={!selectedSku || selectedSku.quantity === 0 || isAddingToCart}
             >
               <ShoppingCart className="w-4 h-4 mr-2" />
-              {t("them_vao_gio_hang")}
+              {isAddingToCart ? t("dang_them") : t("them_vao_gio_hang")}
             </Button>
             <Button
               className="flex-1"

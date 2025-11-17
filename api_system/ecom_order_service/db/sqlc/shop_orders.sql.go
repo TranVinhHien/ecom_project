@@ -343,6 +343,99 @@ func (q *Queries) ListShopOrdersByStatusCount(ctx context.Context, arg ListShopO
 	return count, err
 }
 
+const listShopOrdersSHOP = `-- name: ListShopOrdersSHOP :many
+SELECT shop_orders.id, shop_orders.shop_order_code, shop_orders.order_id, shop_orders.shop_id, shop_orders.status, shop_orders.subtotal, shop_orders.total_discount, shop_orders.total_amount, shop_orders.shop_voucher_code, shop_orders.shop_voucher_discount, shop_orders.shipping_fee, shop_orders.shipping_method, shop_orders.tracking_code, shop_orders.cancellation_reason, shop_orders.created_at, shop_orders.updated_at, shop_orders.paid_at, shop_orders.processing_at, shop_orders.shipped_at, shop_orders.completed_at, shop_orders.cancelled_at FROM shop_orders
+JOIN orders ON shop_orders.order_id = orders.id
+WHERE 
+    -- 1. Nếu @status là NULL, vế (1) -> TRUE, bỏ qua điều kiện status
+    -- 2. Nếu @status có giá trị (vd: 'PROCESSING'), vế (1) -> FALSE, 
+    --    và vế (2) -> shop_orders.status = 'PROCESSING'
+    (? IS NULL OR shop_orders.status = ?)
+    
+    AND shop_orders.shop_id = ?
+ORDER BY 
+    shop_orders.created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListShopOrdersSHOPParams struct {
+	Status NullShopOrdersStatus `json:"status"`
+	ShopID string               `json:"shop_id"`
+	Limit  int32                `json:"limit"`
+	Offset int32                `json:"offset"`
+}
+
+func (q *Queries) ListShopOrdersSHOP(ctx context.Context, arg ListShopOrdersSHOPParams) ([]ShopOrders, error) {
+	rows, err := q.db.QueryContext(ctx, listShopOrdersSHOP,
+		arg.Status,
+		arg.Status,
+		arg.ShopID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ShopOrders
+	for rows.Next() {
+		var i ShopOrders
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShopOrderCode,
+			&i.OrderID,
+			&i.ShopID,
+			&i.Status,
+			&i.Subtotal,
+			&i.TotalDiscount,
+			&i.TotalAmount,
+			&i.ShopVoucherCode,
+			&i.ShopVoucherDiscount,
+			&i.ShippingFee,
+			&i.ShippingMethod,
+			&i.TrackingCode,
+			&i.CancellationReason,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PaidAt,
+			&i.ProcessingAt,
+			&i.ShippedAt,
+			&i.CompletedAt,
+			&i.CancelledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShopOrdersSHOPCount = `-- name: ListShopOrdersSHOPCount :one
+SELECT COUNT(*) FROM shop_orders
+JOIN orders ON shop_orders.order_id = orders.id
+WHERE 
+    (? IS NULL OR shop_orders.status = ?)
+   AND shop_orders.shop_id = ?
+`
+
+type ListShopOrdersSHOPCountParams struct {
+	Status NullShopOrdersStatus `json:"status"`
+	ShopID string               `json:"shop_id"`
+}
+
+func (q *Queries) ListShopOrdersSHOPCount(ctx context.Context, arg ListShopOrdersSHOPCountParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, listShopOrdersSHOPCount, arg.Status, arg.Status, arg.ShopID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const searchShopOrders = `-- name: SearchShopOrders :many
 SELECT shop_orders.id, shop_orders.shop_order_code, shop_orders.order_id, shop_orders.shop_id, shop_orders.status, shop_orders.subtotal, shop_orders.total_discount, shop_orders.total_amount, shop_orders.shop_voucher_code, shop_orders.shop_voucher_discount, shop_orders.shipping_fee, shop_orders.shipping_method, shop_orders.tracking_code, shop_orders.cancellation_reason, shop_orders.created_at, shop_orders.updated_at, shop_orders.paid_at, shop_orders.processing_at, shop_orders.shipped_at, shop_orders.completed_at, shop_orders.cancelled_at FROM shop_orders
 JOIN orders ON shop_orders.order_id = orders.id

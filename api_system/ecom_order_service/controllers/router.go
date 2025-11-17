@@ -52,7 +52,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 	admin := orders.Group("/admin").Use(authorization(api.jwt))
 	{
 		// // GET /api/v1/admin/shop-orders - Lấy danh sách đơn hàng của shop
-		// admin.GET("/shop-orders", api.listShopOrders())
+		admin.GET("/shop-orders", api.listShopOrders())
 
 		// // POST /api/v1/admin/shop-orders/{shopOrderCode}/ship - Đánh dấu đơn hàng đã ship
 		// admin.POST("/shop-orders/:shopOrderCode/ship", api.shipShopOrder())
@@ -85,9 +85,13 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 		{
 			// GET /api/v1/vouchers - list vouchers available to current user
 			vouchers_auth.GET("", api.listVouchersForUser())
-			// POST /api/v1/vouchers - create a voucher (admin/owner)
+
+			// Admin/Seller management routes
 			voucher_role := vouchers_auth.Use(checkRole([]string{"ROLE_ADMIN", "ROLE_SELLER"}))
 			{
+				// GET /api/v1/vouchers/management - list all vouchers for management (admin sees PLATFORM, seller sees SHOP)
+				voucher_role.GET("/management", api.listVouchersForManagement())
+				// POST /api/v1/vouchers - create a voucher (admin/owner)
 				voucher_role.POST("", api.createVoucher())
 				// PUT /api/v1/vouchers/:voucherID - update a voucher
 				voucher_role.PUT("/:voucherID", api.updateVoucher())

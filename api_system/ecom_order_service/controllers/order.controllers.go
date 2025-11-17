@@ -80,7 +80,7 @@ func (api *apiController) getOrderDetail() func(ctx *gin.Context) {
 			return
 		}
 
-		result, err := api.service.GetOrderDetail(ctx, authPayload.Sub, orderCode)
+		result, err := api.service.GetOrderDetail(ctx, authPayload.Sub, authPayload.Scope, orderCode)
 		if err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return
@@ -114,7 +114,7 @@ func (api *apiController) searchOrdersDetail() func(ctx *gin.Context) {
 
 		// Parse basic fields (không bao gồm time)
 		var filter services.ShopOrderSearchFilter
-		
+
 		// Parse basic parameters
 		if status := ctx.Query("status"); status != "" {
 			filter.Status = &status
@@ -144,7 +144,7 @@ func (api *apiController) searchOrdersDetail() func(ctx *gin.Context) {
 				filter.PageSize = val
 			}
 		}
-		
+
 		filter.SortBy = ctx.Query("sort_by")
 
 		// Parse time fields
@@ -259,33 +259,30 @@ func (api *apiController) searchOrdersDetail() func(ctx *gin.Context) {
 // listShopOrders lấy danh sách đơn hàng cho shop owner
 func (api *apiController) listShopOrders() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		authPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
+		_ = ctx.MustGet(authorizationPayload).(*token.Payload)
 
 		// Giả định shopID lấy từ token hoặc query param
 		// Trong production, bạn có thể lấy từ user profile
 		shopID := ctx.Query("shop_id")
+
 		if shopID == "" {
 			// Fallback: sử dụng userID làm shopID nếu không có
-			shopID = authPayload.Sub
+			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "shop_id query parameter is required"))
+			return
 		}
 
 		page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
 
-		var status *string
+		var status string
 		if statusParam := ctx.Query("status"); statusParam != "" {
-			status = &statusParam
+			status = statusParam
 		}
 
-		var dateFrom, dateTo *string
-		if df := ctx.Query("date_from"); df != "" {
-			dateFrom = &df
-		}
-		if dt := ctx.Query("date_to"); dt != "" {
-			dateTo = &dt
-		}
-
-		result, err := api.service.ListShopOrders(ctx, shopID, status, page, limit, dateFrom, dateTo)
+		result, err := api.service.ListShopOrders(ctx, shopID, status, services.QueryFilter{
+			Page:     page,
+			PageSize: limit,
+		})
 		if err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return

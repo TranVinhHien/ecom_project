@@ -179,7 +179,7 @@ func (s *service) CreateOrder(ctx context.Context, userID string, token string, 
 					OriginalUnitPrice:     fmt.Sprintf("%.2f", item.OriginalUnitPrice),
 					FinalUnitPrice:        fmt.Sprintf("%.2f", item.FinalUnitPrice),
 					TotalPrice:            fmt.Sprintf("%.2f", item.TotalPrice),
-					PromotionsSnapshot:    json.RawMessage("{}"),
+					PromotionsSnapshot:    sql.NullString{String: "{}", Valid: true}, // Hiện tại chưa có KM nên để mảng rỗng
 					ProductNameSnapshot:   item.ProductName,
 					ProductImageSnapshot:  productImage,
 					SkuAttributesSnapshot: sql.NullString{String: string(item.SkuAttributes), Valid: true},

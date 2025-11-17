@@ -24,6 +24,11 @@ type Querier interface {
 	CountReviewLikes(ctx context.Context, reviewID string) (int64, error)
 	// Đếm số lần user đã sử dụng 1 voucher (cho check max_usage_per_user)
 	CountVoucherUsageByUser(ctx context.Context, arg CountVoucherUsageByUserParams) (int64, error)
+	// =============================================
+	// CÁC HÀM QUẢN LÝ CHO ADMIN/SELLER
+	// =============================================
+	// Đếm tổng số voucher theo owner với filters
+	CountVouchersForManagement(ctx context.Context, arg CountVouchersForManagementParams) (int64, error)
 	CreateComment(ctx context.Context, arg CreateCommentParams) error
 	// =================================================================
 	// Queries for `orders` table
@@ -127,6 +132,15 @@ type Querier interface {
 	ListShopOrdersByStatus(ctx context.Context, arg ListShopOrdersByStatusParams) ([]ShopOrders, error)
 	//
 	ListShopOrdersByStatusCount(ctx context.Context, arg ListShopOrdersByStatusCountParams) (int64, error)
+	ListShopOrdersSHOP(ctx context.Context, arg ListShopOrdersSHOPParams) ([]ShopOrders, error)
+	ListShopOrdersSHOPCount(ctx context.Context, arg ListShopOrdersSHOPCountParams) (int64, error)
+	ListVouchersForManagementBySortCreatedAtAsc(ctx context.Context, arg ListVouchersForManagementBySortCreatedAtAscParams) ([]Vouchers, error)
+	// Lấy danh sách voucher cho admin/seller - Sắp xếp theo created_at DESC
+	ListVouchersForManagementBySortCreatedAtDesc(ctx context.Context, arg ListVouchersForManagementBySortCreatedAtDescParams) ([]Vouchers, error)
+	ListVouchersForManagementBySortEndDateAsc(ctx context.Context, arg ListVouchersForManagementBySortEndDateAscParams) ([]Vouchers, error)
+	ListVouchersForManagementBySortEndDateDesc(ctx context.Context, arg ListVouchersForManagementBySortEndDateDescParams) ([]Vouchers, error)
+	ListVouchersForManagementBySortStartDateAsc(ctx context.Context, arg ListVouchersForManagementBySortStartDateAscParams) ([]Vouchers, error)
+	ListVouchersForManagementBySortStartDateDesc(ctx context.Context, arg ListVouchersForManagementBySortStartDateDescParams) ([]Vouchers, error)
 	// Xóa bằng ID của bảng history
 	// Reset trạng thái ví voucher (từ USED về AVAILABLE)
 	ResetUserVoucherStatus(ctx context.Context, arg ResetUserVoucherStatusParams) (int64, error)

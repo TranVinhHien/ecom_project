@@ -303,8 +303,344 @@ func (s *service) ListVouchersForUser(ctx context.Context, userID string, filter
 		combinedVouchers = append(combinedVouchers, v)
 	}
 	result := assets_services.NormalizeListSQLNulls(combinedVouchers, "data")
+	return result, nil
+}
+
+// --- Hàm Lấy Danh Sách Voucher Cho Admin/Seller Quản Lý ---
+func (s *service) ListVouchersForManagement(ctx context.Context, ownerID string, ownerType string, filter services.VoucherManagementFilterRequest) (map[string]interface{}, *assets_services.ServiceError) {
+	// 1. Validate ownerType
+	if ownerType != "PLATFORM" && ownerType != "SHOP" {
+		return nil, &assets_services.ServiceError{
+			Code: 400,
+			Err:  fmt.Errorf("owner_type không hợp lệ. Chỉ chấp nhận: PLATFORM, SHOP"),
+		}
+	}
+
+	// 2. Validate và set default cho pagination
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
+	if filter.PageSize <= 0 {
+		filter.PageSize = 20
+	}
+	if filter.PageSize > 100 {
+		filter.PageSize = 100 // Giới hạn tối đa 100 items/trang
+	}
+
+	// 3. Validate sort_by
+	validSortBy := map[string]bool{
+		"created_at_desc": true,
+		"created_at_asc":  true,
+		"start_date_desc": true,
+		"start_date_asc":  true,
+		"end_date_desc":   true,
+		"end_date_asc":    true,
+	}
+	if filter.SortBy == "" {
+		filter.SortBy = "created_at_desc" // Mặc định: mới nhất trước
+	}
+	if !validSortBy[filter.SortBy] {
+		return nil, &assets_services.ServiceError{
+			Code: 400,
+			Err:  fmt.Errorf("sort_by không hợp lệ. Allowed: created_at_desc, created_at_asc, start_date_desc, start_date_asc, end_date_desc, end_date_asc"),
+		}
+	}
+
+	// 4. Validate các filters
+	if filter.DiscountType != nil {
+		validDiscountTypes := map[string]bool{
+			"PERCENTAGE":   true,
+			"FIXED_AMOUNT": true,
+		}
+		if !validDiscountTypes[*filter.DiscountType] {
+			return nil, &assets_services.ServiceError{
+				Code: 400,
+				Err:  fmt.Errorf("discount_type không hợp lệ. Allowed: PERCENTAGE, FIXED_AMOUNT"),
+			}
+		}
+	}
+
+	if filter.AppliesToType != nil {
+		validAppliesToTypes := map[string]bool{
+			"ORDER_TOTAL":  true,
+			"SHIPPING_FEE": true,
+		}
+		if !validAppliesToTypes[*filter.AppliesToType] {
+			return nil, &assets_services.ServiceError{
+				Code: 400,
+				Err:  fmt.Errorf("applies_to_type không hợp lệ. Allowed: ORDER_TOTAL, SHIPPING_FEE"),
+			}
+		}
+	}
+
+	if filter.AudienceType != nil {
+		validAudienceTypes := map[string]bool{
+			"PUBLIC":   true,
+			"ASSIGNED": true,
+		}
+		if !validAudienceTypes[*filter.AudienceType] {
+			return nil, &assets_services.ServiceError{
+				Code: 400,
+				Err:  fmt.Errorf("audience_type không hợp lệ. Allowed: PUBLIC, ASSIGNED"),
+			}
+		}
+	}
+
+	if filter.Status != nil {
+		validStatuses := map[string]bool{
+			"ACTIVE":   true,
+			"EXPIRED":  true,
+			"UPCOMING": true,
+			"DEPLETED": true,
+		}
+		if !validStatuses[*filter.Status] {
+			return nil, &assets_services.ServiceError{
+				Code: 400,
+				Err:  fmt.Errorf("status không hợp lệ. Allowed: ACTIVE, EXPIRED, UPCOMING, DEPLETED"),
+			}
+		}
+	}
+
+	// 5. Build params cho sqlc queries
+	vouchers, total, err := s.getVouchersForManagementUsingSqlc(ctx, ownerID, ownerType, filter)
+	if err != nil {
+		return nil, &assets_services.ServiceError{
+			Code: 500,
+			Err:  fmt.Errorf("lỗi khi lấy danh sách voucher: %w", err),
+		}
+	}
+
+	// 6. Tính toán pagination metadata
+	totalPages := (total + int64(filter.PageSize) - 1) / int64(filter.PageSize)
+
+	result := map[string]interface{}{
+		"data": vouchers,
+		"pagination": map[string]interface{}{
+			"current_page": filter.Page,
+			"page_size":    filter.PageSize,
+			"total_items":  total,
+			"total_pages":  totalPages,
+		},
+	}
 
 	return result, nil
+}
+
+// getVouchersForManagementUsingSqlc sử dụng sqlc generated queries
+func (s *service) getVouchersForManagementUsingSqlc(ctx context.Context, ownerID string, ownerType string, filter services.VoucherManagementFilterRequest) ([]map[string]interface{}, int64, error) {
+	// 1. Build params cho Count query
+	if db.VouchersOwnerType(ownerType) == db.VouchersOwnerTypePLATFORM {
+		ownerID = s.env.PlatformOwnerID
+	}
+	countParams := db.CountVouchersForManagementParams{
+		OwnerID:   ownerID,
+		OwnerType: db.VouchersOwnerType(ownerType),
+	}
+
+	// Add optional filters với LIKE pattern cho search
+	if filter.VoucherCode != nil && *filter.VoucherCode != "" {
+		voucherCodePattern := "%" + *filter.VoucherCode + "%"
+		countParams.VoucherCode = sql.NullString{String: voucherCodePattern, Valid: true}
+	}
+	if filter.Name != nil && *filter.Name != "" {
+		namePattern := "%" + *filter.Name + "%"
+		countParams.Name = sql.NullString{String: namePattern, Valid: true}
+	}
+	if filter.DiscountType != nil {
+		countParams.DiscountType = db.NullVouchersDiscountType{
+			VouchersDiscountType: db.VouchersDiscountType(*filter.DiscountType),
+			Valid:                true,
+		}
+	}
+	if filter.AppliesToType != nil {
+		countParams.AppliesToType = db.NullVouchersAppliesToType{
+			VouchersAppliesToType: db.VouchersAppliesToType(*filter.AppliesToType),
+			Valid:                 true,
+		}
+	}
+	if filter.AudienceType != nil {
+		countParams.AudienceType = db.NullVouchersAudienceType{
+			VouchersAudienceType: db.VouchersAudienceType(*filter.AudienceType),
+			Valid:                true,
+		}
+	}
+	if filter.IsActive != nil {
+		countParams.IsActive = sql.NullBool{Bool: *filter.IsActive, Valid: true}
+	}
+	if filter.Status != nil {
+		countParams.Status = *filter.Status
+	}
+
+	// 2. Get total count
+	total, err := s.repository.CountVouchersForManagement(ctx, countParams)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error counting vouchers: %w", err)
+	}
+
+	// 3. Build params cho List query
+	offset := int32((filter.Page - 1) * filter.PageSize)
+	limitVal := int32(filter.PageSize)
+
+	// Prepare status value
+	var statusValue interface{} = nil
+	if filter.Status != nil {
+		statusValue = *filter.Status
+	}
+
+	// 4. Call appropriate query based on sort_by
+	var vouchersDB []db.Vouchers
+
+	switch filter.SortBy {
+	case "created_at_asc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortCreatedAtAsc(ctx, db.ListVouchersForManagementBySortCreatedAtAscParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	case "start_date_desc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortStartDateDesc(ctx, db.ListVouchersForManagementBySortStartDateDescParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	case "start_date_asc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortStartDateAsc(ctx, db.ListVouchersForManagementBySortStartDateAscParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	case "end_date_desc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortEndDateDesc(ctx, db.ListVouchersForManagementBySortEndDateDescParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	case "end_date_asc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortEndDateAsc(ctx, db.ListVouchersForManagementBySortEndDateAscParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	default: // created_at_desc
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortCreatedAtDesc(ctx, db.ListVouchersForManagementBySortCreatedAtDescParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	}
+
+	if err != nil {
+		return nil, 0, fmt.Errorf("error fetching vouchers: %w", err)
+	}
+
+	// 5. Convert to response format with calculated fields
+	vouchers := make([]map[string]interface{}, 0, len(vouchersDB))
+	for _, v := range vouchersDB {
+		status := s.calculateVoucherStatus(v)
+
+		voucherMap := map[string]interface{}{
+			"id":                  v.ID,
+			"name":                v.Name,
+			"voucher_code":        v.VoucherCode,
+			"owner_type":          v.OwnerType,
+			"owner_id":            v.OwnerID,
+			"discount_type":       v.DiscountType,
+			"discount_value":      v.DiscountValue,
+			"max_discount_amount": v.MaxDiscountAmount,
+			"applies_to_type":     v.AppliesToType,
+			"min_purchase_amount": v.MinPurchaseAmount,
+			"audience_type":       v.AudienceType,
+			"start_date":          v.StartDate,
+			"end_date":            v.EndDate,
+			"total_quantity":      v.TotalQuantity,
+			"used_quantity":       v.UsedQuantity,
+			"remaining_quantity":  v.TotalQuantity - v.UsedQuantity,
+			"max_usage_per_user":  v.MaxUsagePerUser,
+			"is_active":           v.IsActive,
+			"status":              status,
+			"created_at":          v.CreatedAt,
+			"updated_at":          v.UpdatedAt,
+		}
+
+		vouchers = append(vouchers, voucherMap)
+	}
+
+	return vouchers, total, nil
+}
+
+// calculateVoucherStatus tính toán trạng thái hiện tại của voucher
+func (s *service) calculateVoucherStatus(v db.Vouchers) string {
+	now := time.Now()
+
+	// Check depleted first
+	if v.UsedQuantity >= v.TotalQuantity {
+		return "DEPLETED"
+	}
+
+	// Check if expired
+	if v.EndDate.Before(now) {
+		return "EXPIRED"
+	}
+
+	// Check if upcoming
+	if v.StartDate.After(now) {
+		return "UPCOMING"
+	}
+
+	// Check if active
+	if v.IsActive && v.StartDate.Before(now) && v.EndDate.After(now) {
+		return "ACTIVE"
+	}
+
+	return "INACTIVE"
 }
 
 //================================================================

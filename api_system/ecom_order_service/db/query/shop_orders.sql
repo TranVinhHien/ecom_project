@@ -45,6 +45,22 @@ ORDER BY
     shop_orders.created_at DESC
 LIMIT ? OFFSET ?;
 
+-- name: ListShopOrdersSHOP :many
+SELECT shop_orders.* FROM shop_orders
+JOIN orders ON shop_orders.order_id = orders.id
+WHERE 
+    -- 1. Nếu @status là NULL, vế (1) -> TRUE, bỏ qua điều kiện status
+    -- 2. Nếu @status có giá trị (vd: 'PROCESSING'), vế (1) -> FALSE, 
+    --    và vế (2) -> shop_orders.status = 'PROCESSING'
+    (sqlc.narg('status') IS NULL OR shop_orders.status = sqlc.narg('status'))
+    
+    AND shop_orders.shop_id = sqlc.arg('shop_id')
+ORDER BY 
+    shop_orders.created_at DESC
+LIMIT ? OFFSET ?;
+
+
+
 -- name: CancelShopOrdersByIDs :exec
 -- Cập nhật trạng thái một loạt shop_orders thành CANCELLED
 UPDATE shop_orders
@@ -59,6 +75,14 @@ JOIN orders ON shop_orders.order_id = orders.id
 WHERE 
     (sqlc.narg('status') IS NULL OR shop_orders.status = sqlc.narg('status'))
    AND orders.user_id = ?;
+
+-- name: ListShopOrdersSHOPCount :one
+SELECT COUNT(*) FROM shop_orders
+JOIN orders ON shop_orders.order_id = orders.id
+WHERE 
+    (sqlc.narg('status') IS NULL OR shop_orders.status = sqlc.narg('status'))
+   AND shop_orders.shop_id = ?;
+
 
 -- name: ListShopOrdersByShopIDPaged :many
 SELECT * FROM shop_orders

@@ -30,6 +30,71 @@ func (q *Queries) CountVoucherUsageByUser(ctx context.Context, arg CountVoucherU
 	return count, err
 }
 
+const countVouchersForManagement = `-- name: CountVouchersForManagement :one
+
+SELECT COUNT(*) as total
+FROM vouchers
+WHERE
+    owner_id = ?
+    AND owner_type = ?
+    AND (? IS NULL OR voucher_code LIKE ?)
+    AND (? IS NULL OR name LIKE ?)
+    AND (? IS NULL OR discount_type = ?)
+    AND (? IS NULL OR applies_to_type = ?)
+    AND (? IS NULL OR audience_type = ?)
+    AND (? IS NULL OR is_active = ?)
+    AND (
+        ? IS NULL
+        OR (? = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (? = 'EXPIRED' AND end_date < NOW())
+        OR (? = 'UPCOMING' AND start_date > NOW())
+        OR (? = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+`
+
+type CountVouchersForManagementParams struct {
+	OwnerID       string                    `json:"owner_id"`
+	OwnerType     VouchersOwnerType         `json:"owner_type"`
+	VoucherCode   sql.NullString            `json:"voucher_code"`
+	Name          sql.NullString            `json:"name"`
+	DiscountType  NullVouchersDiscountType  `json:"discount_type"`
+	AppliesToType NullVouchersAppliesToType `json:"applies_to_type"`
+	AudienceType  NullVouchersAudienceType  `json:"audience_type"`
+	IsActive      sql.NullBool              `json:"is_active"`
+	Status        interface{}               `json:"status"`
+}
+
+// =============================================
+// CÁC HÀM QUẢN LÝ CHO ADMIN/SELLER
+// =============================================
+// Đếm tổng số voucher theo owner với filters
+func (q *Queries) CountVouchersForManagement(ctx context.Context, arg CountVouchersForManagementParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countVouchersForManagement,
+		arg.OwnerID,
+		arg.OwnerType,
+		arg.VoucherCode,
+		arg.VoucherCode,
+		arg.Name,
+		arg.Name,
+		arg.DiscountType,
+		arg.DiscountType,
+		arg.AppliesToType,
+		arg.AppliesToType,
+		arg.AudienceType,
+		arg.AudienceType,
+		arg.IsActive,
+		arg.IsActive,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+	)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const createVoucher = `-- name: CreateVoucher :exec
 INSERT INTO vouchers (
     id,
@@ -620,6 +685,613 @@ func (q *Queries) IncrementVoucherUsage(ctx context.Context, id string) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const listVouchersForManagementBySortCreatedAtAsc = `-- name: ListVouchersForManagementBySortCreatedAtAsc :many
+SELECT id, name, voucher_code, owner_type, owner_id, discount_type, discount_value, max_discount_amount, applies_to_type, min_purchase_amount, audience_type, start_date, end_date, total_quantity, used_quantity, max_usage_per_user, is_active, created_at, updated_at FROM vouchers
+WHERE
+    owner_id = ?
+    AND owner_type = ?
+    AND (? IS NULL OR voucher_code LIKE ?)
+    AND (? IS NULL OR name LIKE ?)
+    AND (? IS NULL OR discount_type = ?)
+    AND (? IS NULL OR applies_to_type = ?)
+    AND (? IS NULL OR audience_type = ?)
+    AND (? IS NULL OR is_active = ?)
+    AND (
+        ? IS NULL
+        OR (? = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (? = 'EXPIRED' AND end_date < NOW())
+        OR (? = 'UPCOMING' AND start_date > NOW())
+        OR (? = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY created_at ASC
+LIMIT ? OFFSET ?
+`
+
+type ListVouchersForManagementBySortCreatedAtAscParams struct {
+	OwnerID       string                    `json:"owner_id"`
+	OwnerType     VouchersOwnerType         `json:"owner_type"`
+	VoucherCode   sql.NullString            `json:"voucher_code"`
+	Name          sql.NullString            `json:"name"`
+	DiscountType  NullVouchersDiscountType  `json:"discount_type"`
+	AppliesToType NullVouchersAppliesToType `json:"applies_to_type"`
+	AudienceType  NullVouchersAudienceType  `json:"audience_type"`
+	IsActive      sql.NullBool              `json:"is_active"`
+	Status        interface{}               `json:"status"`
+	Limit         int32                     `json:"limit"`
+	Offset        int32                     `json:"offset"`
+}
+
+func (q *Queries) ListVouchersForManagementBySortCreatedAtAsc(ctx context.Context, arg ListVouchersForManagementBySortCreatedAtAscParams) ([]Vouchers, error) {
+	rows, err := q.db.QueryContext(ctx, listVouchersForManagementBySortCreatedAtAsc,
+		arg.OwnerID,
+		arg.OwnerType,
+		arg.VoucherCode,
+		arg.VoucherCode,
+		arg.Name,
+		arg.Name,
+		arg.DiscountType,
+		arg.DiscountType,
+		arg.AppliesToType,
+		arg.AppliesToType,
+		arg.AudienceType,
+		arg.AudienceType,
+		arg.IsActive,
+		arg.IsActive,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Vouchers
+	for rows.Next() {
+		var i Vouchers
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.VoucherCode,
+			&i.OwnerType,
+			&i.OwnerID,
+			&i.DiscountType,
+			&i.DiscountValue,
+			&i.MaxDiscountAmount,
+			&i.AppliesToType,
+			&i.MinPurchaseAmount,
+			&i.AudienceType,
+			&i.StartDate,
+			&i.EndDate,
+			&i.TotalQuantity,
+			&i.UsedQuantity,
+			&i.MaxUsagePerUser,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVouchersForManagementBySortCreatedAtDesc = `-- name: ListVouchersForManagementBySortCreatedAtDesc :many
+SELECT id, name, voucher_code, owner_type, owner_id, discount_type, discount_value, max_discount_amount, applies_to_type, min_purchase_amount, audience_type, start_date, end_date, total_quantity, used_quantity, max_usage_per_user, is_active, created_at, updated_at FROM vouchers
+WHERE
+    owner_id = ?
+    AND owner_type = ?
+    AND (? IS NULL OR voucher_code LIKE ?)
+    AND (? IS NULL OR name LIKE ?)
+    AND (? IS NULL OR discount_type = ?)
+    AND (? IS NULL OR applies_to_type = ?)
+    AND (? IS NULL OR audience_type = ?)
+    AND (? IS NULL OR is_active = ?)
+    AND (
+        ? IS NULL
+        OR (? = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (? = 'EXPIRED' AND end_date < NOW())
+        OR (? = 'UPCOMING' AND start_date > NOW())
+        OR (? = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListVouchersForManagementBySortCreatedAtDescParams struct {
+	OwnerID       string                    `json:"owner_id"`
+	OwnerType     VouchersOwnerType         `json:"owner_type"`
+	VoucherCode   sql.NullString            `json:"voucher_code"`
+	Name          sql.NullString            `json:"name"`
+	DiscountType  NullVouchersDiscountType  `json:"discount_type"`
+	AppliesToType NullVouchersAppliesToType `json:"applies_to_type"`
+	AudienceType  NullVouchersAudienceType  `json:"audience_type"`
+	IsActive      sql.NullBool              `json:"is_active"`
+	Status        interface{}               `json:"status"`
+	Limit         int32                     `json:"limit"`
+	Offset        int32                     `json:"offset"`
+}
+
+// Lấy danh sách voucher cho admin/seller - Sắp xếp theo created_at DESC
+func (q *Queries) ListVouchersForManagementBySortCreatedAtDesc(ctx context.Context, arg ListVouchersForManagementBySortCreatedAtDescParams) ([]Vouchers, error) {
+	rows, err := q.db.QueryContext(ctx, listVouchersForManagementBySortCreatedAtDesc,
+		arg.OwnerID,
+		arg.OwnerType,
+		arg.VoucherCode,
+		arg.VoucherCode,
+		arg.Name,
+		arg.Name,
+		arg.DiscountType,
+		arg.DiscountType,
+		arg.AppliesToType,
+		arg.AppliesToType,
+		arg.AudienceType,
+		arg.AudienceType,
+		arg.IsActive,
+		arg.IsActive,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Vouchers
+	for rows.Next() {
+		var i Vouchers
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.VoucherCode,
+			&i.OwnerType,
+			&i.OwnerID,
+			&i.DiscountType,
+			&i.DiscountValue,
+			&i.MaxDiscountAmount,
+			&i.AppliesToType,
+			&i.MinPurchaseAmount,
+			&i.AudienceType,
+			&i.StartDate,
+			&i.EndDate,
+			&i.TotalQuantity,
+			&i.UsedQuantity,
+			&i.MaxUsagePerUser,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVouchersForManagementBySortEndDateAsc = `-- name: ListVouchersForManagementBySortEndDateAsc :many
+SELECT id, name, voucher_code, owner_type, owner_id, discount_type, discount_value, max_discount_amount, applies_to_type, min_purchase_amount, audience_type, start_date, end_date, total_quantity, used_quantity, max_usage_per_user, is_active, created_at, updated_at FROM vouchers
+WHERE
+    owner_id = ?
+    AND owner_type = ?
+    AND (? IS NULL OR voucher_code LIKE ?)
+    AND (? IS NULL OR name LIKE ?)
+    AND (? IS NULL OR discount_type = ?)
+    AND (? IS NULL OR applies_to_type = ?)
+    AND (? IS NULL OR audience_type = ?)
+    AND (? IS NULL OR is_active = ?)
+    AND (
+        ? IS NULL
+        OR (? = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (? = 'EXPIRED' AND end_date < NOW())
+        OR (? = 'UPCOMING' AND start_date > NOW())
+        OR (? = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY end_date ASC
+LIMIT ? OFFSET ?
+`
+
+type ListVouchersForManagementBySortEndDateAscParams struct {
+	OwnerID       string                    `json:"owner_id"`
+	OwnerType     VouchersOwnerType         `json:"owner_type"`
+	VoucherCode   sql.NullString            `json:"voucher_code"`
+	Name          sql.NullString            `json:"name"`
+	DiscountType  NullVouchersDiscountType  `json:"discount_type"`
+	AppliesToType NullVouchersAppliesToType `json:"applies_to_type"`
+	AudienceType  NullVouchersAudienceType  `json:"audience_type"`
+	IsActive      sql.NullBool              `json:"is_active"`
+	Status        interface{}               `json:"status"`
+	Limit         int32                     `json:"limit"`
+	Offset        int32                     `json:"offset"`
+}
+
+func (q *Queries) ListVouchersForManagementBySortEndDateAsc(ctx context.Context, arg ListVouchersForManagementBySortEndDateAscParams) ([]Vouchers, error) {
+	rows, err := q.db.QueryContext(ctx, listVouchersForManagementBySortEndDateAsc,
+		arg.OwnerID,
+		arg.OwnerType,
+		arg.VoucherCode,
+		arg.VoucherCode,
+		arg.Name,
+		arg.Name,
+		arg.DiscountType,
+		arg.DiscountType,
+		arg.AppliesToType,
+		arg.AppliesToType,
+		arg.AudienceType,
+		arg.AudienceType,
+		arg.IsActive,
+		arg.IsActive,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Vouchers
+	for rows.Next() {
+		var i Vouchers
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.VoucherCode,
+			&i.OwnerType,
+			&i.OwnerID,
+			&i.DiscountType,
+			&i.DiscountValue,
+			&i.MaxDiscountAmount,
+			&i.AppliesToType,
+			&i.MinPurchaseAmount,
+			&i.AudienceType,
+			&i.StartDate,
+			&i.EndDate,
+			&i.TotalQuantity,
+			&i.UsedQuantity,
+			&i.MaxUsagePerUser,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVouchersForManagementBySortEndDateDesc = `-- name: ListVouchersForManagementBySortEndDateDesc :many
+SELECT id, name, voucher_code, owner_type, owner_id, discount_type, discount_value, max_discount_amount, applies_to_type, min_purchase_amount, audience_type, start_date, end_date, total_quantity, used_quantity, max_usage_per_user, is_active, created_at, updated_at FROM vouchers
+WHERE
+    owner_id = ?
+    AND owner_type = ?
+    AND (? IS NULL OR voucher_code LIKE ?)
+    AND (? IS NULL OR name LIKE ?)
+    AND (? IS NULL OR discount_type = ?)
+    AND (? IS NULL OR applies_to_type = ?)
+    AND (? IS NULL OR audience_type = ?)
+    AND (? IS NULL OR is_active = ?)
+    AND (
+        ? IS NULL
+        OR (? = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (? = 'EXPIRED' AND end_date < NOW())
+        OR (? = 'UPCOMING' AND start_date > NOW())
+        OR (? = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY end_date DESC
+LIMIT ? OFFSET ?
+`
+
+type ListVouchersForManagementBySortEndDateDescParams struct {
+	OwnerID       string                    `json:"owner_id"`
+	OwnerType     VouchersOwnerType         `json:"owner_type"`
+	VoucherCode   sql.NullString            `json:"voucher_code"`
+	Name          sql.NullString            `json:"name"`
+	DiscountType  NullVouchersDiscountType  `json:"discount_type"`
+	AppliesToType NullVouchersAppliesToType `json:"applies_to_type"`
+	AudienceType  NullVouchersAudienceType  `json:"audience_type"`
+	IsActive      sql.NullBool              `json:"is_active"`
+	Status        interface{}               `json:"status"`
+	Limit         int32                     `json:"limit"`
+	Offset        int32                     `json:"offset"`
+}
+
+func (q *Queries) ListVouchersForManagementBySortEndDateDesc(ctx context.Context, arg ListVouchersForManagementBySortEndDateDescParams) ([]Vouchers, error) {
+	rows, err := q.db.QueryContext(ctx, listVouchersForManagementBySortEndDateDesc,
+		arg.OwnerID,
+		arg.OwnerType,
+		arg.VoucherCode,
+		arg.VoucherCode,
+		arg.Name,
+		arg.Name,
+		arg.DiscountType,
+		arg.DiscountType,
+		arg.AppliesToType,
+		arg.AppliesToType,
+		arg.AudienceType,
+		arg.AudienceType,
+		arg.IsActive,
+		arg.IsActive,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Vouchers
+	for rows.Next() {
+		var i Vouchers
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.VoucherCode,
+			&i.OwnerType,
+			&i.OwnerID,
+			&i.DiscountType,
+			&i.DiscountValue,
+			&i.MaxDiscountAmount,
+			&i.AppliesToType,
+			&i.MinPurchaseAmount,
+			&i.AudienceType,
+			&i.StartDate,
+			&i.EndDate,
+			&i.TotalQuantity,
+			&i.UsedQuantity,
+			&i.MaxUsagePerUser,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVouchersForManagementBySortStartDateAsc = `-- name: ListVouchersForManagementBySortStartDateAsc :many
+SELECT id, name, voucher_code, owner_type, owner_id, discount_type, discount_value, max_discount_amount, applies_to_type, min_purchase_amount, audience_type, start_date, end_date, total_quantity, used_quantity, max_usage_per_user, is_active, created_at, updated_at FROM vouchers
+WHERE
+    owner_id = ?
+    AND owner_type = ?
+    AND (? IS NULL OR voucher_code LIKE ?)
+    AND (? IS NULL OR name LIKE ?)
+    AND (? IS NULL OR discount_type = ?)
+    AND (? IS NULL OR applies_to_type = ?)
+    AND (? IS NULL OR audience_type = ?)
+    AND (? IS NULL OR is_active = ?)
+    AND (
+        ? IS NULL
+        OR (? = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (? = 'EXPIRED' AND end_date < NOW())
+        OR (? = 'UPCOMING' AND start_date > NOW())
+        OR (? = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY start_date ASC
+LIMIT ? OFFSET ?
+`
+
+type ListVouchersForManagementBySortStartDateAscParams struct {
+	OwnerID       string                    `json:"owner_id"`
+	OwnerType     VouchersOwnerType         `json:"owner_type"`
+	VoucherCode   sql.NullString            `json:"voucher_code"`
+	Name          sql.NullString            `json:"name"`
+	DiscountType  NullVouchersDiscountType  `json:"discount_type"`
+	AppliesToType NullVouchersAppliesToType `json:"applies_to_type"`
+	AudienceType  NullVouchersAudienceType  `json:"audience_type"`
+	IsActive      sql.NullBool              `json:"is_active"`
+	Status        interface{}               `json:"status"`
+	Limit         int32                     `json:"limit"`
+	Offset        int32                     `json:"offset"`
+}
+
+func (q *Queries) ListVouchersForManagementBySortStartDateAsc(ctx context.Context, arg ListVouchersForManagementBySortStartDateAscParams) ([]Vouchers, error) {
+	rows, err := q.db.QueryContext(ctx, listVouchersForManagementBySortStartDateAsc,
+		arg.OwnerID,
+		arg.OwnerType,
+		arg.VoucherCode,
+		arg.VoucherCode,
+		arg.Name,
+		arg.Name,
+		arg.DiscountType,
+		arg.DiscountType,
+		arg.AppliesToType,
+		arg.AppliesToType,
+		arg.AudienceType,
+		arg.AudienceType,
+		arg.IsActive,
+		arg.IsActive,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Vouchers
+	for rows.Next() {
+		var i Vouchers
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.VoucherCode,
+			&i.OwnerType,
+			&i.OwnerID,
+			&i.DiscountType,
+			&i.DiscountValue,
+			&i.MaxDiscountAmount,
+			&i.AppliesToType,
+			&i.MinPurchaseAmount,
+			&i.AudienceType,
+			&i.StartDate,
+			&i.EndDate,
+			&i.TotalQuantity,
+			&i.UsedQuantity,
+			&i.MaxUsagePerUser,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVouchersForManagementBySortStartDateDesc = `-- name: ListVouchersForManagementBySortStartDateDesc :many
+SELECT id, name, voucher_code, owner_type, owner_id, discount_type, discount_value, max_discount_amount, applies_to_type, min_purchase_amount, audience_type, start_date, end_date, total_quantity, used_quantity, max_usage_per_user, is_active, created_at, updated_at FROM vouchers
+WHERE
+    owner_id = ?
+    AND owner_type = ?
+    AND (? IS NULL OR voucher_code LIKE ?)
+    AND (? IS NULL OR name LIKE ?)
+    AND (? IS NULL OR discount_type = ?)
+    AND (? IS NULL OR applies_to_type = ?)
+    AND (? IS NULL OR audience_type = ?)
+    AND (? IS NULL OR is_active = ?)
+    AND (
+        ? IS NULL
+        OR (? = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (? = 'EXPIRED' AND end_date < NOW())
+        OR (? = 'UPCOMING' AND start_date > NOW())
+        OR (? = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY start_date DESC
+LIMIT ? OFFSET ?
+`
+
+type ListVouchersForManagementBySortStartDateDescParams struct {
+	OwnerID       string                    `json:"owner_id"`
+	OwnerType     VouchersOwnerType         `json:"owner_type"`
+	VoucherCode   sql.NullString            `json:"voucher_code"`
+	Name          sql.NullString            `json:"name"`
+	DiscountType  NullVouchersDiscountType  `json:"discount_type"`
+	AppliesToType NullVouchersAppliesToType `json:"applies_to_type"`
+	AudienceType  NullVouchersAudienceType  `json:"audience_type"`
+	IsActive      sql.NullBool              `json:"is_active"`
+	Status        interface{}               `json:"status"`
+	Limit         int32                     `json:"limit"`
+	Offset        int32                     `json:"offset"`
+}
+
+func (q *Queries) ListVouchersForManagementBySortStartDateDesc(ctx context.Context, arg ListVouchersForManagementBySortStartDateDescParams) ([]Vouchers, error) {
+	rows, err := q.db.QueryContext(ctx, listVouchersForManagementBySortStartDateDesc,
+		arg.OwnerID,
+		arg.OwnerType,
+		arg.VoucherCode,
+		arg.VoucherCode,
+		arg.Name,
+		arg.Name,
+		arg.DiscountType,
+		arg.DiscountType,
+		arg.AppliesToType,
+		arg.AppliesToType,
+		arg.AudienceType,
+		arg.AudienceType,
+		arg.IsActive,
+		arg.IsActive,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Status,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Vouchers
+	for rows.Next() {
+		var i Vouchers
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.VoucherCode,
+			&i.OwnerType,
+			&i.OwnerID,
+			&i.DiscountType,
+			&i.DiscountValue,
+			&i.MaxDiscountAmount,
+			&i.AppliesToType,
+			&i.MinPurchaseAmount,
+			&i.AudienceType,
+			&i.StartDate,
+			&i.EndDate,
+			&i.TotalQuantity,
+			&i.UsedQuantity,
+			&i.MaxUsagePerUser,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const resetUserVoucherStatus = `-- name: ResetUserVoucherStatus :execrows

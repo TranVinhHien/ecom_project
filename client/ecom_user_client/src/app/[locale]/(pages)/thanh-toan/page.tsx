@@ -59,6 +59,7 @@ export default function CheckoutPage() {
 
   // Local state for checkout items (avoid Zustand hydration issues)
   const [checkoutItems, setCheckoutItems] = useState<CheckoutItem[]>([]);
+  const [isFromCart, setIsFromCart] = useState<boolean>(false); // Track nguồn gốc checkout
   const [selectedPayment, setSelectedPayment] = useState<string>(PAYMENT_METHODS.COD);
   const [orderNote, setOrderNote] = useState<string>("");
   const [isMounted, setIsMounted] = useState<boolean>(false);
@@ -168,7 +169,19 @@ export default function CheckoutPage() {
     
     // Read from Zustand store after mount
     const storeItems = useCheckoutStore.getState().items;
+    const storeIsFromCart = useCheckoutStore.getState().isFromCart;
+    
     setCheckoutItems(storeItems);
+    setIsFromCart(storeIsFromCart);
+
+    // ===== LOG SELECTED SKU_IDs FOR CHECKOUT =====
+    if (storeItems.length > 0) {
+      const skuIds = storeItems.map(item => item.sku_id);
+      console.log("🛒 CHECKOUT - Selected SKU IDs:", skuIds);
+      console.log("🛒 CHECKOUT - Full checkout items:", storeItems);
+      console.log("🛒 CHECKOUT - Is from cart:", storeIsFromCart ? "✅ TỪ GIỎ HÀNG (sẽ xóa sau khi thanh toán)" : "❌ MUA NGAY (không xóa)");
+    }
+    // ============================================
 
     // Redirect if empty
     if (storeItems.length === 0) {
@@ -471,8 +484,15 @@ export default function CheckoutPage() {
           description: `Mã đơn hàng: ${response.result?.orderCode  || 'N/A'} - Tổng tiền: ${formatPrice(response.result?.grandTotal || 0)}`,
         });
 
-        // Clear cart and checkout
-        clearCart();
+        // ✅ CHỈ XÓA GIỎ HÀNG NẾU CHECKOUT TỪ GIỎ HÀNG
+        if (isFromCart) {
+          console.log("🗑️ Xóa items khỏi giỏ hàng (vì checkout từ giỏ hàng)");
+          clearCart();
+        } else {
+          console.log("ℹ️ Không xóa giỏ hàng (vì mua ngay từ trang chi tiết)");
+        }
+        
+        // Luôn luôn clear checkout store
         clearCheckout();
         
         // Redirect based on payment method

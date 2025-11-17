@@ -22,6 +22,8 @@ type ReadENV struct {
 	KafkaConsumerGroup string `mapstructure:"KAFKA_CONSUMER_GROUP"`
 
 	TokenSystem string `mapstructure:"TOKEN_SYSTEM"`
+
+	PlatformOwnerID string `mapstructure:"PLATFORM_OWNER_ID"`
 }
 
 func LoadConfig(path string) (config ReadENV, err error) {

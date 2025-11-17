@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { tokenRefreshService } from "@/lib/tokenRefreshService"
+import { cartSyncService } from "@/lib/cartSyncService"
 
 export default function LoginForm() {
     const t = useTranslations("Login")
@@ -190,6 +191,30 @@ export default function LoginForm() {
                     // Initialize token refresh service after successful login
                     console.log("🔄 Initializing token refresh service...");
                     tokenRefreshService.initialize();
+
+                    // Sync localStorage cart to API cart
+                    try {
+                        console.log("🛒 Checking for localStorage cart items to sync...");
+                        if (cartSyncService.hasLocalCartItems()) {
+                            const itemCount = cartSyncService.getLocalCartItemsCount();
+                            console.log(`📦 Found ${itemCount} items to sync`);
+                            
+                            await cartSyncService.syncLocalCartToAPI();
+                            
+                            toast({
+                                title: "Giỏ hàng đã được đồng bộ",
+                                description: `${itemCount} sản phẩm từ giỏ hàng tạm thời đã được thêm vào tài khoản của bạn`,
+                            });
+                        }
+                    } catch (syncError) {
+                        console.error("❌ Cart sync failed:", syncError);
+                        // Don't block login if cart sync fails
+                        toast({
+                            title: "Cảnh báo",
+                            description: "Không thể đồng bộ giỏ hàng, nhưng bạn đã đăng nhập thành công",
+                            variant: "default",
+                        });
+                    }
 
                     // Redirect to home
                     setTimeout(() => {

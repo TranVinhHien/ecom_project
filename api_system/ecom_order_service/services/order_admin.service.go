@@ -10,65 +10,113 @@ import (
 	services "github.com/TranVinhHien/ecom_order_service/services/entity"
 )
 
-// ListShopOrders lấy danh sách đơn hàng của shop với filter và phân trang
-func (s *service) ListShopOrders(ctx context.Context, shopID string, status *string, page, limit int, dateFrom, dateTo *string) (map[string]interface{}, *assets_services.ServiceError) {
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 || limit > 100 {
-		limit = 10
-	}
-	offset := (page - 1) * limit
+// // ListShopOrders lấy danh sách đơn hàng của shop với filter và phân trang
+// func (s *service) ListShopOrders(ctx context.Context, shopID string, status *string, page, limit int, dateFrom, dateTo *string) (map[string]interface{}, *assets_services.ServiceError) {
+// 	if page < 1 {
+// 		page = 1
+// 	}
+// 	if limit < 1 || limit > 100 {
+// 		limit = 10
+// 	}
+// 	offset := (page - 1) * limit
 
-	// Lấy shop orders từ DB
-	shopOrders, err := s.repository.ListShopOrdersByShopIDPaged(ctx, db.ListShopOrdersByShopIDPagedParams{
+// 	// Lấy shop orders từ DB
+// 	shopOrders, err := s.repository.ListShopOrdersByShopIDPaged(ctx, db.ListShopOrdersByShopIDPagedParams{
+// 		ShopID: shopID,
+// 		Limit:  int32(limit),
+// 		Offset: int32(offset),
+// 	})
+// 	if err != nil {
+// 		return nil, assets_services.NewError(500, fmt.Errorf("lỗi khi lấy đơn hàng: %w", err))
+// 	}
+
+// 	// Filter by status if provided
+// 	filteredOrders := make([]db.ShopOrders, 0)
+// 	for _, order := range shopOrders {
+// 		if status != nil && string(order.Status) != *status {
+// 			continue
+// 		}
+// 		// TODO: Filter by date range if dateFrom/dateTo provided
+// 		filteredOrders = append(filteredOrders, order)
+// 	}
+
+// 	// Build response
+// 	shopOrderSummaries := make([]map[string]interface{}, len(filteredOrders))
+// 	for i, shopOrder := range filteredOrders {
+// 		// Lấy items count
+// 		items, _ := s.repository.ListOrderItemsByShopOrderID(ctx, shopOrder.ID)
+
+// 		subtotal, _ := parseFloat(shopOrder.Subtotal)
+// 		totalAmount, _ := parseFloat(shopOrder.TotalAmount)
+
+// 		shopOrderSummaries[i] = map[string]interface{}{
+// 			"shopOrderId":   shopOrder.ID,
+// 			"shopOrderCode": shopOrder.ShopOrderCode,
+// 			"orderId":       shopOrder.OrderID,
+// 			"status":        string(shopOrder.Status),
+// 			"subtotal":      subtotal,
+// 			"totalAmount":   totalAmount,
+// 			"itemCount":     len(items),
+// 			"createdAt":     shopOrder.CreatedAt.Format("2006-01-02 15:04:05"),
+// 		}
+// 	}
+
+// 	response := map[string]interface{}{
+// 		"shopOrders": shopOrderSummaries,
+// 		"totalCount": len(filteredOrders),
+// 		"page":       page,
+// 		"limit":      limit,
+// 	}
+
+// 	return response, nil
+// }
+
+// ListShopOrders lấy danh sách đơn hàng của shop với filter và phân trang
+func (s *service) ListShopOrders(ctx context.Context, shopID string, status string, query services.QueryFilter) (map[string]interface{}, *assets_services.ServiceError) {
+
+	// Lấy orders từ DB
+	orders, err := s.repository.ListShopOrdersSHOP(ctx, db.ListShopOrdersSHOPParams{
 		ShopID: shopID,
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		Status: db.NullShopOrdersStatus{
+			ShopOrdersStatus: db.ShopOrdersStatus(status),
+			Valid:            status != "",
+		},
+		Limit:  int32(query.PageSize),
+		Offset: int32(query.PageSize * (query.Page - 1)),
 	})
 	if err != nil {
-		return nil, assets_services.NewError(500, fmt.Errorf("lỗi khi lấy đơn hàng: %w", err))
+		return nil, assets_services.NewError(400, fmt.Errorf("lỗi khi lấy đơn hàng: %w", err))
 	}
-
-	// Filter by status if provided
-	filteredOrders := make([]db.ShopOrders, 0)
-	for _, order := range shopOrders {
-		if status != nil && string(order.Status) != *status {
-			continue
+	//
+	totalElements, err := s.repository.ListShopOrdersSHOPCount(ctx, db.ListShopOrdersSHOPCountParams{
+		ShopID: shopID,
+		Status: db.NullShopOrdersStatus{
+			ShopOrdersStatus: db.ShopOrdersStatus(status),
+			Valid:            status != "",
+		},
+	})
+	if err != nil {
+		return nil, assets_services.NewError(400, fmt.Errorf("lỗi khi đếm đơn hàng: %w", err))
+	}
+	// Build order summaries
+	orderSummaries := make([]services.ShopOrderDetail, len(orders))
+	for i, order := range orders {
+		// Đếm số items (lấy từ shop_orders và order_items)
+		OrderItems, err := s.repository.ListOrderItemsByShopOrderID(ctx, order.ID)
+		if err != nil {
+			return nil, assets_services.NewError(400, fmt.Errorf("lỗi khi lấy order items: %w", err))
 		}
-		// TODO: Filter by date range if dateFrom/dateTo provided
-		filteredOrders = append(filteredOrders, order)
+		orderSummaries[i] = s.convertDBShopOrderToService(order, OrderItems)
 	}
+	totalPage := totalElements / int64(query.PageSize)
 
-	// Build response
-	shopOrderSummaries := make([]map[string]interface{}, len(filteredOrders))
-	for i, shopOrder := range filteredOrders {
-		// Lấy items count
-		items, _ := s.repository.ListOrderItemsByShopOrderID(ctx, shopOrder.ID)
-
-		subtotal, _ := parseFloat(shopOrder.Subtotal)
-		totalAmount, _ := parseFloat(shopOrder.TotalAmount)
-
-		shopOrderSummaries[i] = map[string]interface{}{
-			"shopOrderId":   shopOrder.ID,
-			"shopOrderCode": shopOrder.ShopOrderCode,
-			"orderId":       shopOrder.OrderID,
-			"status":        string(shopOrder.Status),
-			"subtotal":      subtotal,
-			"totalAmount":   totalAmount,
-			"itemCount":     len(items),
-			"createdAt":     shopOrder.CreatedAt.Format("2006-01-02 15:04:05"),
-		}
-	}
-
-	response := map[string]interface{}{
-		"shopOrders": shopOrderSummaries,
-		"totalCount": len(filteredOrders),
-		"page":       page,
-		"limit":      limit,
-	}
-
-	return response, nil
+	result := map[string]interface{}{}
+	result["data"] = orderSummaries
+	result["currentPage"] = query.Page
+	result["totalPages"] = totalPage
+	result["totalElements"] = totalElements
+	result["limit"] = query.PageSize
+	return result, nil
 }
 
 // ShipShopOrder đánh dấu shop order đã được ship

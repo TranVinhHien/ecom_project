@@ -8,12 +8,13 @@ import { ProductSummary } from "@/types/product.types";
 
 export default function Home() {
   const t = useTranslations("System");
-  
   // Sử dụng hook useGetProducts giống các trang khác
   const { data, isLoading, error } = useGetProducts({
     page: 1,
-    limit: 60,
-    price_min:60000
+    limit: 20,
+    // price_min:60000,
+    sort:'best_sell',
+    cate_path:'/laptop-may-vi-tinh-linh-kien'
   });
 
   if (isLoading) return (
@@ -92,9 +93,9 @@ function HomeSuggestion({ products, t }: { products: ProductSummary[], t: any })
     <div className="w-full px-4 md:px-0">
       <section className="bg-[#f5f5f5] py-4 px-4 md:px-6 rounded-lg mb-8 w-full">
         <div className="flex items-center border-b-2 border-[#ee4d2d] pb-2 mb-4">
-          <span className="text-base md:text-lg font-bold text-[#ee4d2d] uppercase tracking-wider">{t("goi_y_hom_nay")}</span>
+          <span className="text-base md:text-lg font-bold text-[#ee4d2d] uppercase tracking-wider">{t("ban_chay_nhat_dien_tu")}</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
           {products.length > 0 && products?.map(product => (
             <C_ProductSimple key={product.id} product={product} />
           ))}

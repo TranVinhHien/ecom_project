@@ -68,6 +68,24 @@ func (api *apiController) listUserOrders() func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, assets_api.SimpSuccessResponse("Get orders successfully", result))
 	}
 }
+func (api *apiController) getProductTotalSold() func(ctx *gin.Context) {
+	return func(ctx *gin.Context) {
+
+		var req services.GetBulkProductRatingStatsRequest
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Invalid request body: "+err.Error()))
+			return
+		}
+
+		result, err := api.service.GetProductTotalSold(ctx, req.ProductIDs)
+		if err != nil {
+			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
+			return
+		}
+
+		ctx.JSON(http.StatusOK, assets_api.SimpSuccessResponse("Get getProductTotalSold successfully", result))
+	}
+}
 
 // getOrderDetail lấy chi tiết đầy đủ của một đơn hàng
 func (api *apiController) getOrderDetail() func(ctx *gin.Context) {
@@ -295,7 +313,7 @@ func (api *apiController) listShopOrders() func(ctx *gin.Context) {
 // shipShopOrder đánh dấu đơn hàng của shop đã được ship
 func (api *apiController) shipShopOrder() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		authPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
+		_ = ctx.MustGet(authorizationPayload).(*token.Payload)
 		shopOrderCode := ctx.Param("shopOrderCode")
 
 		if shopOrderCode == "" {
@@ -303,19 +321,20 @@ func (api *apiController) shipShopOrder() func(ctx *gin.Context) {
 			return
 		}
 
-		var req services.ShipOrderRequest
-		if err := ctx.ShouldBindJSON(&req); err != nil {
-			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Invalid request body: "+err.Error()))
-			return
-		}
+		// var req services.ShipOrderRequest
+		// if err := ctx.ShouldBindJSON(&req); err != nil {
+		// 	ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Invalid request body: "+err.Error()))
+		// 	return
+		// }
 
 		// Giả định shopID lấy từ token
 		shopID := ctx.Query("shop_id")
 		if shopID == "" {
-			shopID = authPayload.Sub
+			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "shop_id query parameter is required"))
+			return
 		}
 
-		err := api.service.ShipShopOrder(ctx, shopID, shopOrderCode, req)
+		err := api.service.ShipShopOrder(ctx, shopID, shopOrderCode)
 		if err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return

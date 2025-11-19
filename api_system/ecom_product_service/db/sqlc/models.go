@@ -65,7 +65,7 @@ type Category struct {
 	CategoryID string         `json:"category_id"`
 	Name       string         `json:"name"`
 	Key        string         `json:"key"`
-	Path       string         `json:"path"`
+	Path       sql.NullString `json:"path"`
 	Parent     sql.NullString `json:"parent"`
 	Image      sql.NullString `json:"image"`
 }
@@ -96,6 +96,7 @@ type Product struct {
 	UpdateDate                sql.NullTime            `json:"update_date"`
 	CreateBy                  sql.NullString          `json:"create_by"`
 	UpdateBy                  sql.NullString          `json:"update_by"`
+	TotalSold                 int64                   `json:"total_sold"`
 }
 
 type ProductSku struct {

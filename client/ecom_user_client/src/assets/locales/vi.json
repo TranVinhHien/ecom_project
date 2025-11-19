@@ -1,5 +1,6 @@
 {
-  "System": {
+  "System": { 
+    "ban_chay_nhat_dien_tu":"Thiết bị điện tử bán chạy nhất",
     "khieu-nai":"Khiếu nại",
     "tim-kiem-bang-hinh-anh":"Tìm kiếm bằng hình ảnh",
     "tai-khoan-cua-toi":"Tài khoản của tôi",

@@ -42,6 +42,13 @@ SET
   update_date = NOW()
 WHERE id = sqlc.arg('id');
 
+-- name: IncrementProductTotalSold :exec
+UPDATE product
+SET 
+  total_sold = total_sold + sqlc.arg('quantity'),
+  update_date = NOW()
+WHERE id = sqlc.arg('id');
+
 -- name: DeleteProduct :exec
 DELETE FROM product WHERE id = sqlc.arg('id');
 
@@ -100,6 +107,7 @@ SELECT
   p.update_date,
   p.create_by,
   p.update_by,
+  p.total_sold,
   COALESCE(MIN(ps.price), 0)  AS min_price,
   COALESCE(MAX(ps.price), 0)  AS max_price,
   (SELECT id FROM product_sku WHERE product_id = p.id ORDER BY price ASC  LIMIT 1) AS min_price_sku_id,
@@ -118,6 +126,7 @@ HAVING
   (sqlc.narg('price_min') IS NULL OR MAX(ps.price) >= sqlc.narg('price_min'))
   AND (sqlc.narg('price_max') IS NULL OR MIN(ps.price) <= sqlc.narg('price_max'))
 ORDER BY
+  CASE WHEN sqlc.narg('sort') = 'best_sell'  THEN p.total_sold END DESC,
   CASE WHEN sqlc.narg('sort') = 'price_asc'  THEN MIN(ps.price) END ASC,
   CASE WHEN sqlc.narg('sort') = 'price_desc' THEN MIN(ps.price) END DESC,
   CASE WHEN sqlc.narg('sort') = 'name_asc'   THEN p.name END ASC,

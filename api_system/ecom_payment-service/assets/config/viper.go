@@ -13,7 +13,7 @@ type ReadENV struct {
 	HTTPServerAddress string        `mapstructure:"HTTP_SERVER_ADDRESS"`
 	JWTSecret         string        `mapstructure:"JWT_SECRET"`
 	OrderDuration     time.Duration `mapstructure:"ORDER_DURATION"`
-	ClientIP          string        `mapstructure:"CLIENT_IP"`
+	ClientIP          []string      `mapstructure:"CLIENT_IP"`
 
 	RedisAddress string `mapstructure:"REDIS_ADDRESS"`
 	// Kafka configuration

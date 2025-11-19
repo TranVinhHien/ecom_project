@@ -26,6 +26,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 	// =================================================================
 	orders := group.Group("/orders")
 	{
+		orders.POST("/get_product_total_sold", api.getProductTotalSold())
 		orders.PUT("/callback_payment_online/:order_id", api.callbackPaymentOnline())
 	}
 
@@ -51,12 +52,13 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 
 	admin := orders.Group("/admin").Use(authorization(api.jwt))
 	{
-		// // GET /api/v1/admin/shop-orders - Lấy danh sách đơn hàng của shop
-		admin.GET("/shop-orders", api.listShopOrders())
-
-		// // POST /api/v1/admin/shop-orders/{shopOrderCode}/ship - Đánh dấu đơn hàng đã ship
-		// admin.POST("/shop-orders/:shopOrderCode/ship", api.shipShopOrder())
-
+		admin_role := admin.Use(checkRole([]string{"ROLE_SELLER"}))
+		{
+			// // GET /api/v1/admin/shop-orders - Lấy danh sách đơn hàng của shop
+			admin_role.GET("/shop-orders", api.listShopOrders())
+			// // POST /api/v1/admin/shop-orders/{shopOrderCode}/ship - Đánh dấu đơn hàng đã ship
+			admin_role.POST("/shop-orders/:shopOrderCode/ship", api.shipShopOrder())
+		}
 		// PUT /api/v1/admin/shop-orders/{shopOrderCode}/status - Cập nhật trạng thái đơn hàng
 		admin.PUT("/update_status", api.updateShopOrderStatus())
 	}

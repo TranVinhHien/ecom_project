@@ -7,11 +7,11 @@ import (
 )
 
 type ReadENV struct {
-	DBSource          string `mapstructure:"DB_SOURCE"`
-	HTTPServerAddress string `mapstructure:"HTTP_SERVER_ADDRESS"`
-	JWTSecret         string `mapstructure:"JWT_SECRET"`
-	ClientIP          string `mapstructure:"CLIENT_IP"`
-	RedisAddress      string `mapstructure:"REDIS_ADDRESS"`
+	DBSource          string   `mapstructure:"DB_SOURCE"`
+	HTTPServerAddress string   `mapstructure:"HTTP_SERVER_ADDRESS"`
+	JWTSecret         string   `mapstructure:"JWT_SECRET"`
+	ClientIP          []string `mapstructure:"CLIENT_IP"`
+	RedisAddress      string   `mapstructure:"REDIS_ADDRESS"`
 
 	// URL service
 	URLProductService     string `mapstructure:"URL_PRODUCT_SERVICE"`

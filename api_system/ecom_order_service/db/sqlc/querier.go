@@ -85,6 +85,9 @@ type Querier interface {
 	// Lấy điểm đánh giá trung bình và tổng số lượt đánh giá cho một sản phẩm.
 	// Chỉ tính các bình luận gốc (parent_id IS NULL).
 	GetProductRatingStats(ctx context.Context, productID string) (GetProductRatingStatsRow, error)
+	//
+	// lấy tổng số lượng đã bán của các product_ids trong các đơn hàng có trạng thái 'PROCESSING', 'SHIPPED', 'COMPLETED'(đang dùng cho product_service)
+	GetProductTotalSold(ctx context.Context, productIds []string) ([]GetProductTotalSoldRow, error)
 	// Lấy danh sách voucher CÔNG KHAI (cho toàn bộ người dùng)
 	// Chỉ lấy voucher còn hiệu lực và còn số lượng
 	GetPublicVouchers(ctx context.Context) ([]Vouchers, error)

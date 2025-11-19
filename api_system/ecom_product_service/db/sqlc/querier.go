@@ -40,6 +40,7 @@ type Querier interface {
 	GetProductStockTotal(ctx context.Context, productID string) (interface{}, error)
 	GetRootCategories(ctx context.Context) ([]Category, error)
 	GetSubCategories(ctx context.Context, parent sql.NullString) ([]Category, error)
+	IncrementProductTotalSold(ctx context.Context, arg IncrementProductTotalSoldParams) error
 	ListBrands(ctx context.Context) ([]Brand, error)
 	ListBrandsPaged(ctx context.Context, arg ListBrandsPagedParams) ([]Brand, error)
 	ListCategories(ctx context.Context) ([]Category, error)

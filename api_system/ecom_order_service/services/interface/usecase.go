@@ -16,9 +16,12 @@ type Orders interface {
 
 	// Admin/Shop endpoints
 	ListShopOrders(ctx context.Context, shopID string, status string, query services.QueryFilter) (map[string]interface{}, *assets_services.ServiceError)
-	ShipShopOrder(ctx context.Context, shopID, shopOrderCode string, req services.ShipOrderRequest) *assets_services.ServiceError
+	ShipShopOrder(ctx context.Context, shopID, shopOrderCode string) *assets_services.ServiceError
 	UpdateShopOrderStatus(ctx context.Context, shopOrderCode, status string) *assets_services.ServiceError
 	CallbackPaymentOnline(ctx context.Context, OrderID string) *assets_services.ServiceError
+
+	// Get total sold quantity for given product IDs
+	GetProductTotalSold(ctx context.Context, productID []string) (map[string]interface{}, *assets_services.ServiceError)
 
 	// Kafka event handlers
 	HandlePaymentSucceededEvent(ctx context.Context, body services.PaymentSucceededEvent) error

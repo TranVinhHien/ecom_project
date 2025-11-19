@@ -123,6 +123,65 @@ func (q *Queries) GetOrderItemsByShopOrderIDs(ctx context.Context, shopOrderIds 
 	return items, nil
 }
 
+const getProductTotalSold = `-- name: GetProductTotalSold :many
+
+
+
+
+
+SELECT
+  oi.product_id,
+CAST(COALESCE(SUM(oi.quantity), 0) AS SIGNED) AS total_sold
+FROM
+  order_items AS oi
+JOIN
+  shop_orders AS so ON oi.shop_order_id = so.id
+WHERE
+  oi.product_id IN (/*SLICE:product_ids*/?)
+  AND so.status IN ('PROCESSING', 'SHIPPED', 'COMPLETED')
+GROUP BY
+  oi.product_id
+`
+
+type GetProductTotalSoldRow struct {
+	ProductID string `json:"product_id"`
+	TotalSold int64  `json:"total_sold"`
+}
+
+// lấy tổng số lượng đã bán của các product_ids trong các đơn hàng có trạng thái 'PROCESSING', 'SHIPPED', 'COMPLETED'(đang dùng cho product_service)
+func (q *Queries) GetProductTotalSold(ctx context.Context, productIds []string) ([]GetProductTotalSoldRow, error) {
+	query := getProductTotalSold
+	var queryParams []interface{}
+	if len(productIds) > 0 {
+		for _, v := range productIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:product_ids*/?", strings.Repeat(",?", len(productIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:product_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetProductTotalSoldRow
+	for rows.Next() {
+		var i GetProductTotalSoldRow
+		if err := rows.Scan(&i.ProductID, &i.TotalSold); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrderItemsByShopOrderID = `-- name: ListOrderItemsByShopOrderID :many
 SELECT id, shop_order_id, product_id, sku_id, quantity, original_unit_price, final_unit_price, total_price, promotions_snapshot, product_name_snapshot, product_image_snapshot, sku_attributes_snapshot FROM order_items
 WHERE shop_order_id = ?

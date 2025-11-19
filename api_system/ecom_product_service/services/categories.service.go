@@ -28,7 +28,7 @@ func (s *service) GetCategoris(ctx context.Context, cate_id string) (map[string]
 				Name:       cat.Name,
 				Parent:     services.Narg[string]{Valid: cat.Parent.Valid, Data: cat.Parent.String},
 				Key:        cat.Key,
-				Path:       cat.Path,
+				Path:       cat.Path.String,
 			})
 		}
 		// cates[0].
@@ -91,7 +91,7 @@ func (s *service) AddCategory(ctx context.Context, userName string, cat services
 		Parent:     sql.NullString{String: cat.Parent.Data, Valid: cat.Parent.Valid},
 		Key:        key,
 		Image:      sql.NullString{String: cat.Image.Data, Valid: cat.Image.Valid},
-		Path:       key,
+		// Path:       sql.NullString{String: key, Valid: true},
 	})
 	if err != nil {
 		fmt.Println("Error CreateCategory:", err)
@@ -111,7 +111,7 @@ func (s *service) AddCategory(ctx context.Context, userName string, cat services
 			Name:       c.Name,
 			Parent:     services.Narg[string]{Valid: c.Parent.Valid, Data: c.Parent.String},
 			Key:        c.Key,
-			Path:       c.Path,
+			Path:       c.Path.String,
 		})
 	}
 	if err = s.redis.AddCategories(ctx, list_cate); err != nil {
@@ -178,7 +178,7 @@ func (s *service) UpdateCategory(ctx context.Context, userName string, cat servi
 			Name:       c.Name,
 			Parent:     services.Narg[string]{Valid: c.Parent.Valid, Data: c.Parent.String},
 			Key:        c.Key,
-			Path:       c.Path,
+			Path:       c.Path.String,
 		})
 	}
 	if err = s.redis.AddCategories(ctx, list_cate); err != nil {
@@ -209,7 +209,7 @@ func (s *service) DeleteCategory(ctx context.Context, userName string, categoryI
 			Name:       c.Name,
 			Parent:     services.Narg[string]{Valid: c.Parent.Valid, Data: c.Parent.String},
 			Key:        c.Key,
-			Path:       c.Path,
+			Path:       c.Path.String,
 		})
 	}
 	if err = s.redis.AddCategories(ctx, list_cate); err != nil {

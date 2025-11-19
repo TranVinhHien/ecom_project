@@ -246,3 +246,16 @@ type ProductForSearch struct {
 	// CreateBy                  sql.NullString          `json:"create_by"`
 	// UpdateBy                  sql.NullString          `json:"update_by"`
 }
+
+// ProductRating represents rating information for a product
+type ProductRating struct {
+	ProductID     string  `json:"product_id"`
+	TotalReviews  int64   `json:"total_reviews"`
+	AverageRating float64 `json:"average_rating"`
+}
+
+// ProductRatingStatsItem represents rating statistics for a single product
+type ProductTotalSold struct {
+	ProductID string `json:"product_id"`
+	TotalSold int64  `json:"total_sold"`
+}

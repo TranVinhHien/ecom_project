@@ -86,7 +86,6 @@ func (s *service) GetAllProductSimple(ctx context.Context, query services.QueryF
 			}
 		}
 	}
-
 	// Tạo slice mới kết hợp product và rating
 	productsWithRating := make([]interface{}, len(product_spu))
 	for i, product := range product_spu {
@@ -804,28 +803,17 @@ func containsString(slice []string, str string) bool {
 }
 
 func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []services.ProductUpdateSKUReserver, type_req services.ProductUpdateType) *assets_services.ServiceError {
-	//log.Printf("[UpdateSKUReserverProduct] Bắt đầu cập nhật số lượng đặt trước cho %d SKU với loại: %v", len(productSKU), type_req)
-
 	err := s.repository.ExecTS(ctx, func(tx db.Querier) error {
 		for _, sku := range productSKU {
-			//log.Printf("[UpdateSKUReserverProduct] Xử lý SKU %d/%d - ID: %s, Số lượng: %d", i+1, len(productSKU), sku.SkuID, sku.QuantityReserver)
-
 			sku_db, err := tx.GetProductSKU(ctx, sku.SkuID)
 			if err != nil {
-				//log.Printf("[UpdateSKUReserverProduct] LỖI: Không tìm thấy SKU với ID: %s. Chi tiết: %v", sku.SkuID, err)
 				return fmt.Errorf("không tìm thấy SKU với ID: %s. Lỗi: %w", sku.SkuID, err)
 			}
 
 			switch {
 			case type_req == services.HOLD:
-				//log.Printf("[UpdateSKUReserverProduct] HOLD - SKU %s: Tồn kho hiện tại: %d, Đã đặt trước: %d, Yêu cầu thêm: %d",
-				// sku.SkuID, sku_db.Quantity, sku_db.QuantityReserver, sku.QuantityReserver)
-
-				// update reserver if sku_db.Quantity - newReserver >=0
 				sku_db.QuantityReserver += sku.QuantityReserver
 				if sku_db.Quantity-sku_db.QuantityReserver < 0 {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Không đủ số lượng tồn kho cho SKU %s. Tồn kho: %d, Đã đặt trước: %d, Yêu cầu: %d",
-					// sku.SkuID, sku_db.Quantity, sku_db.QuantityReserver-sku.QuantityReserver, sku.QuantityReserver)
 					return fmt.Errorf("không đủ số lượng tồn kho cho SKU %s (Còn: %d, Yêu cầu: %d)", sku.SkuID, sku_db.Quantity-sku_db.QuantityReserver+sku.QuantityReserver, sku.QuantityReserver)
 				}
 
@@ -834,21 +822,13 @@ func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []ser
 					QuantityReserver: sql.NullInt32{Int32: sku_db.QuantityReserver, Valid: true},
 				})
 				if err != nil {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Không thể cập nhật HOLD cho SKU %s. Chi tiết: %v", sku.SkuID, err)
 					return fmt.Errorf("không thể cập nhật số lượng đặt trước cho SKU: %w", err)
 				}
-				//log.Printf("[UpdateSKUReserverProduct] HOLD thành công - SKU %s: Số lượng đặt trước mới: %d", sku.SkuID, sku_db.QuantityReserver)
 
 			case type_req == services.COMMIT:
-				//log.Printf("[UpdateSKUReserverProduct] COMMIT - SKU %s: Tồn kho: %d, Đã đặt trước: %d, Xác nhận: %d",
-				// sku.SkuID, sku_db.Quantity, sku_db.QuantityReserver, sku.QuantityReserver)
-
-				// update - reserver and quentity if reserver - sku.reserver >=0 and  quantity - reserver >=0
 				new_QuantityReserver := sku_db.QuantityReserver - sku.QuantityReserver
 				new_Quantity := sku_db.Quantity - sku.QuantityReserver
 				if new_QuantityReserver < 0 || new_Quantity < 0 {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Dữ liệu không hợp lệ khi COMMIT SKU %s. Đặt trước mới: %d, Tồn kho mới: %d",
-					// sku.SkuID, new_QuantityReserver, new_Quantity)
 					return fmt.Errorf("dữ liệu không hợp lệ khi xác nhận đơn hàng cho SKU %s", sku.SkuID)
 				}
 				err = tx.UpdateProductSKU(ctx, db.UpdateProductSKUParams{
@@ -857,20 +837,20 @@ func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []ser
 					Quantity:         sql.NullInt32{Int32: new_Quantity, Valid: true},
 				})
 				if err != nil {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Không thể cập nhật COMMIT cho SKU %s. Chi tiết: %v", sku.SkuID, err)
 					return fmt.Errorf("không thể xác nhận đơn hàng cho SKU: %w", err)
 				}
-				//log.Printf("[UpdateSKUReserverProduct] COMMIT thành công - SKU %s: Tồn kho mới: %d, Đặt trước mới: %d", sku.SkuID, new_Quantity, new_QuantityReserver)
+				// trường hợp cập nhật xác nhận sản phẩm thì sẽ cộng số lượng mua nó vào trường số lượng đã bán
+				err = tx.IncrementProductTotalSold(ctx, db.IncrementProductTotalSoldParams{
+					Quantity: int64(sku.QuantityReserver),
+					ID:       sku_db.ProductID,
+				})
+				if err != nil {
+					return fmt.Errorf("không thể cập nhật thêm vào số lượng bán hàng cho shop.: %w", err)
+				}
 
 			case type_req == services.ROLLBACK:
-				//log.Printf("[UpdateSKUReserverProduct] ROLLBACK - SKU %s: Đã đặt trước: %d, Hoàn lại: %d",
-				// sku.SkuID, sku_db.QuantityReserver, sku.QuantityReserver)
-
-				// update reserver if sku_db.reserver - newReserver >= 0
 				sku_db.QuantityReserver -= sku.QuantityReserver
 				if sku_db.QuantityReserver < 0 {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Số lượng đặt trước không hợp lệ khi ROLLBACK SKU %s. Đặt trước mới: %d",
-					// sku.SkuID, sku_db.QuantityReserver)
 					return fmt.Errorf("dữ liệu không hợp lệ khi hoàn tác đơn hàng cho SKU %s", sku.SkuID)
 				}
 				err = tx.UpdateProductSKU(ctx, db.UpdateProductSKUParams{
@@ -878,13 +858,9 @@ func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []ser
 					QuantityReserver: sql.NullInt32{Int32: sku_db.QuantityReserver, Valid: true},
 				})
 				if err != nil {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Không thể cập nhật ROLLBACK cho SKU %s. Chi tiết: %v", sku.SkuID, err)
 					return fmt.Errorf("không thể hoàn tác đơn hàng cho SKU: %w", err)
 				}
-				//log.Printf("[UpdateSKUReserverProduct] ROLLBACK thành công - SKU %s: Số lượng đặt trước mới: %d", sku.SkuID, sku_db.QuantityReserver)
-
 			default:
-				//log.Printf("[UpdateSKUReserverProduct] LỖI: Loại cập nhật không hợp lệ: %v", type_req)
 				return fmt.Errorf("loại cập nhật không hợp lệ: %v", type_req)
 			}
 		}
@@ -892,11 +868,9 @@ func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []ser
 	})
 
 	if err != nil {
-		//log.Printf("[UpdateSKUReserverProduct] LỖI: Cập nhật số lượng đặt trước thất bại. Chi tiết: %v", err)
 		return assets_services.NewError(400, fmt.Errorf("không thể cập nhật số lượng đặt trước: %w", err))
 	}
 
-	//log.Printf("[UpdateSKUReserverProduct] Thành công cập nhật %d SKU với loại: %v", len(productSKU), type_req)
 	return nil
 }
 

@@ -52,7 +52,7 @@ CREATE TABLE product (
     update_date DATETIME DEFAULT NOW() ON UPDATE NOW(),
     create_by VARCHAR(128),
     update_by VARCHAR(128),
-
+    total_sold BIGINT NOT NULL DEFAULT 0,
     -- Khóa ngoại
     FOREIGN KEY (brand_id) REFERENCES brand(brand_id),
     FOREIGN KEY (category_id) REFERENCES category(category_id)

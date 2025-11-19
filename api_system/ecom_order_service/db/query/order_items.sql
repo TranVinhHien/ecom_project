@@ -38,3 +38,21 @@ WHERE shop_order_id = ?;
 SELECT shop_order_id, sku_id, quantity
 FROM order_items
 WHERE shop_order_id IN (sqlc.slice(shop_order_ids)); --
+
+
+
+
+-- name: GetProductTotalSold :many
+-- lấy tổng số lượng đã bán của các product_ids trong các đơn hàng có trạng thái 'PROCESSING', 'SHIPPED', 'COMPLETED'(đang dùng cho product_service)
+SELECT
+  oi.product_id,
+CAST(COALESCE(SUM(oi.quantity), 0) AS SIGNED) AS total_sold
+FROM
+  order_items AS oi
+JOIN
+  shop_orders AS so ON oi.shop_order_id = so.id
+WHERE
+  oi.product_id IN (sqlc.slice(product_ids))
+  AND so.status IN ('PROCESSING', 'SHIPPED', 'COMPLETED')
+GROUP BY
+  oi.product_id;

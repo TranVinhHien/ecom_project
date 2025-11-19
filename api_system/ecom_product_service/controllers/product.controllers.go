@@ -28,7 +28,7 @@ func (api *apiController) getAllProductSimple() func(ctx *gin.Context) {
 		price_max_s := ctx.DefaultQuery("price_max", "-1")
 		keywords := ctx.DefaultQuery("keywords", "")
 		sort := ctx.DefaultQuery("sort", "")
-		sort_order := []string{"price_asc", "price_desc", "name_asc", "name_desc"}
+		sort_order := []string{"price_asc", "price_desc", "name_asc", "name_desc", "best_sell"}
 		// check if sort not in sort_order
 		if sort != "" {
 			check := false

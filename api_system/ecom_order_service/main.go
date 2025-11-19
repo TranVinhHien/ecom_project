@@ -82,7 +82,7 @@ func main() {
 	})
 	// config cors middleware
 	config := cors.Config{
-		AllowOrigins:     []string{env.ClientIP},                              // Chỉ cho phép localhost:3000
+		AllowOrigins:     env.ClientIP,                                        // Chỉ cho phép localhost:3000
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}, // Các method được phép
 		AllowHeaders:     []string{"Content-Type", "Origin", "Authorization"}, // Các headers được phép
 		ExposeHeaders:    []string{"Content-Length"},                          // Các headers trả về

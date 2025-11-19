@@ -74,6 +74,11 @@ const C_ProductSimple = ({ product }: { product: ProductSummary }) => {
                         <span> {product.rating.average_rating.toFixed(1)} ({product.rating.total_reviews})</span>
                       </div>
                     )}
+                     {product.total_sold > 0 && (
+                      <div className="flex items-center ml-auto  text-xs font-semibold px-2 py-1 rounded">
+                        <span>Đã bán {product.total_sold}</span>
+                      </div>
+                    )}
                 </CardContent>
 
                 <CardFooter className="p-4 pt-0">

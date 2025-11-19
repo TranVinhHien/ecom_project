@@ -18,14 +18,16 @@ import ProductComments from '@/components/ProductComments';
 import { useChatStore } from '@/store/chatStore';
 import { getImageUrl } from '@/assets/helpers/convert_tool';
 import ImageGalleryModal from '@/components/ImageGalleryModal';
+import ShopInfo from '@/components/ShopInfo';
 
 // Image Slider Component
-const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage, onImageClick }: {
+const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage, onImageClick, shopId }: {
   images: string[];
   currentIndex: number;
   setCurrentIndex: (index: number) => void;
   optionImage: string | null;
   onImageClick: (index: number) => void;
+  shopId?: string;
 }) => {
   const [isAutoSlide, setIsAutoSlide] = useState(true);
 // const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -152,6 +154,13 @@ const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage
           </button>
         ))}
       </div>
+
+      {/* Shop Info Section - Below Thumbnails */}
+      {shopId && (
+        <div className="mt-4">
+          <ShopInfo shopId={shopId} />
+        </div>
+      )}
     </div>
   );
 };
@@ -392,6 +401,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
           setCurrentIndex={setCurrentImageIndex}
           optionImage={optionPreviewImage}
           onImageClick={handleImageClick}
+          shopId={product?.shop_id}
         />
 
         {/* Right: Product Info */}

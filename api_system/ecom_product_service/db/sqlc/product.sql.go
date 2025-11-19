@@ -297,7 +297,7 @@ func (q *Queries) GetProductByKey(ctx context.Context, key string) (GetProductBy
 }
 
 const getProductIDs = `-- name: GetProductIDs :many
-SELECT id, name, ` + "`" + `key` + "`" + `, description, short_description, brand_id, category_id, shop_id, image, media, delete_status, product_is_permission_return, product_is_permission_check, create_date, update_date, create_by, update_by FROM product 
+SELECT id, name, ` + "`" + `key` + "`" + `, description, short_description, brand_id, category_id, shop_id, image, media, delete_status, product_is_permission_return, product_is_permission_check, create_date, update_date, create_by, update_by, total_sold FROM product 
 WHERE id IN (/*SLICE:product_ids*/?)
 `
 
@@ -338,6 +338,7 @@ func (q *Queries) GetProductIDs(ctx context.Context, productIds []string) ([]Pro
 			&i.UpdateDate,
 			&i.CreateBy,
 			&i.UpdateBy,
+			&i.TotalSold,
 		); err != nil {
 			return nil, err
 		}
@@ -365,6 +366,24 @@ func (q *Queries) GetProductStockTotal(ctx context.Context, productID string) (i
 	return total_stock, err
 }
 
+const incrementProductTotalSold = `-- name: IncrementProductTotalSold :exec
+UPDATE product
+SET 
+  total_sold = total_sold + ?,
+  update_date = NOW()
+WHERE id = ?
+`
+
+type IncrementProductTotalSoldParams struct {
+	Quantity int64  `json:"quantity"`
+	ID       string `json:"id"`
+}
+
+func (q *Queries) IncrementProductTotalSold(ctx context.Context, arg IncrementProductTotalSoldParams) error {
+	_, err := q.db.ExecContext(ctx, incrementProductTotalSold, arg.Quantity, arg.ID)
+	return err
+}
+
 const listProductsAdvanced = `-- name: ListProductsAdvanced :many
 SELECT
   p.id,
@@ -384,6 +403,7 @@ SELECT
   p.update_date,
   p.create_by,
   p.update_by,
+  p.total_sold,
   COALESCE(MIN(ps.price), 0)  AS min_price,
   COALESCE(MAX(ps.price), 0)  AS max_price,
   (SELECT id FROM product_sku WHERE product_id = p.id ORDER BY price ASC  LIMIT 1) AS min_price_sku_id,
@@ -402,6 +422,7 @@ HAVING
   (? IS NULL OR MAX(ps.price) >= ?)
   AND (? IS NULL OR MIN(ps.price) <= ?)
 ORDER BY
+  CASE WHEN ? = 'best_sell'  THEN p.total_sold END DESC,
   CASE WHEN ? = 'price_asc'  THEN MIN(ps.price) END ASC,
   CASE WHEN ? = 'price_desc' THEN MIN(ps.price) END DESC,
   CASE WHEN ? = 'name_asc'   THEN p.name END ASC,
@@ -440,6 +461,7 @@ type ListProductsAdvancedRow struct {
 	UpdateDate                sql.NullTime            `json:"update_date"`
 	CreateBy                  sql.NullString          `json:"create_by"`
 	UpdateBy                  sql.NullString          `json:"update_by"`
+	TotalSold                 int64                   `json:"total_sold"`
 	MinPrice                  interface{}             `json:"min_price"`
 	MaxPrice                  interface{}             `json:"max_price"`
 	MinPriceSkuID             sql.NullString          `json:"min_price_sku_id"`
@@ -460,6 +482,7 @@ func (q *Queries) ListProductsAdvanced(ctx context.Context, arg ListProductsAdva
 		arg.PriceMin,
 		arg.PriceMax,
 		arg.PriceMax,
+		arg.Sort,
 		arg.Sort,
 		arg.Sort,
 		arg.Sort,
@@ -492,6 +515,7 @@ func (q *Queries) ListProductsAdvanced(ctx context.Context, arg ListProductsAdva
 			&i.UpdateDate,
 			&i.CreateBy,
 			&i.UpdateBy,
+			&i.TotalSold,
 			&i.MinPrice,
 			&i.MaxPrice,
 			&i.MinPriceSkuID,

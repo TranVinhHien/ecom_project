@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"mime/multipart"
 	"time"
 
@@ -20,6 +21,7 @@ type ApiServer interface {
 	UploadMultipleImages(token string, files []*multipart.FileHeader) ([]string, error)
 	UploadSingleImage(token string, file *multipart.FileHeader) (string, error)
 	RemoveImage(token string, imageURLs []string) error
+	GetProductTotalSold(ctx context.Context, productIDs []string) (map[string]server_order.GetProductTotalSold, error)
 	GetBulkProductRatingStats(productIDs []string) (map[string]server_order.ProductRatingStatsItem, error)
 }
 
@@ -45,4 +47,9 @@ func (c apiClient) RemoveImage(token string, imageURLs []string) error {
 // GetBulkProductRatingStats lấy thống kê đánh giá cho nhiều sản phẩm từ order service
 func (c apiClient) GetBulkProductRatingStats(productIDs []string) (map[string]server_order.ProductRatingStatsItem, error) {
 	return c.order.GetBulkProductRatingStats(productIDs)
+}
+
+// GetBulkProductRatingStats lấy thống kê đánh giá cho nhiều sản phẩm từ order service
+func (c apiClient) GetProductTotalSold(ctx context.Context, productIDs []string) (map[string]server_order.GetProductTotalSold, error) {
+	return c.order.GetProductTotalSold(ctx, productIDs)
 }

@@ -65,8 +65,11 @@ func getShopID() gin.HandlerFunc {
 			ctx.AbortWithStatusJSON(401, assets_api.ResponseError(401, "token không tồn tại"))
 			return
 		}
-		// _ := payload.(*token.Payload)
-		// call API get shop
-		ctx.Set("shop_id", "uuid-shop")
+		shop_id := ctx.Query("shop_id")
+		if shop_id == "" {
+			ctx.AbortWithStatusJSON(400, assets_api.ResponseError(400, "shop_id không được để trống"))
+			return
+		}
+		ctx.Set("shop_id", shop_id)
 	}
 }

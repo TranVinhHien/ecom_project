@@ -60,7 +60,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 	// Tất cả API trong nhóm này yêu cầu đăng nhập và có vai trò "ADMIN"
 	platform := group.Group("/platform").
 		Use(authorization(api.jwt)).
-		Use(checkRole("ADMIN")) // Sử dụng middleware từ ví dụ của bạn
+		Use(checkRole("ROLE_ADMIN")) // Sử dụng middleware từ ví dụ của bạn
 	{
 		// Nhóm 1: Tổng quan
 		platform.GET("/overview", api.getPlatformOverview())

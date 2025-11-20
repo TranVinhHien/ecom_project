@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherRequest, user_id, user_type string) *assets_services.ServiceError {
+func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherRequest, shop_id, user_type string) *assets_services.ServiceError {
 	// 1. Validate toàn bộ dữ liệu đầu vào
 	if err := s.validateCreateVoucherRequest(req); err != nil {
 		return &assets_services.ServiceError{
@@ -25,7 +25,7 @@ func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherR
 
 	// 2. Tạo UUID
 	voucherID := uuid.New().String()
-
+	owner := shop_id
 	max_discount_amount := 0.0
 	if req.MaxDiscountAmount != nil {
 		max_discount_amount = *req.MaxDiscountAmount
@@ -33,6 +33,8 @@ func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherR
 	var ownerType db.VouchersOwnerType
 	if user_type == "ROLE_ADMIN" {
 		ownerType = db.VouchersOwnerTypePLATFORM
+		owner = s.env.PlatformOwnerID
+
 	} else if user_type == "ROLE_SELLER" {
 		ownerType = db.VouchersOwnerTypeSHOP
 	} else {
@@ -49,7 +51,7 @@ func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherR
 		Name:              req.Name,
 		VoucherCode:       req.VoucherCode,
 		OwnerType:         ownerType,
-		OwnerID:           user_id,
+		OwnerID:           owner,
 		DiscountType:      db.VouchersDiscountType(req.DiscountType),
 		DiscountValue:     fmt.Sprintf("%.2f", req.DiscountValue),
 		MaxDiscountAmount: sql.NullString{String: fmt.Sprintf("%.2f", max_discount_amount), Valid: db.VouchersDiscountType(req.DiscountType) == db.VouchersDiscountTypePERCENTAGE},
@@ -78,7 +80,7 @@ func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherR
 
 // --- Hàm Sửa Voucher (Partial Update) ---
 
-func (s *service) UpdateVoucher(ctx context.Context, voucherID string, user_id string, req services.UpdateVoucherRequest) *assets_services.ServiceError {
+func (s *service) UpdateVoucher(ctx context.Context, voucherID string, user_id string, user_type string, req services.UpdateVoucherRequest) *assets_services.ServiceError {
 	// 1. Map DTO (Request) sang Params (sqlc)
 	// Vì dùng `sqlc.narg`, struct Params của `UpdateVoucher` sẽ dùng `sql.Null*`
 	// Chúng ta chỉ set giá trị `Valid: true` cho những trường KHÔNG PHẢI nil trong request
@@ -92,7 +94,14 @@ func (s *service) UpdateVoucher(ctx context.Context, voucherID string, user_id s
 			Code: 404,
 			Err:  fmt.Errorf("không tìm thấy voucher với ID %s: %w", voucherID, err)}
 	}
-	if voucher_db.OwnerID != user_id {
+
+	if voucher_db.OwnerType == db.VouchersOwnerTypePLATFORM && user_type == "ROLE_SELLER" {
+		return &assets_services.ServiceError{
+			Code: 403,
+			Err:  fmt.Errorf("bạn không có quyền sửa voucher này"),
+		}
+	}
+	if voucher_db.OwnerID != user_id && user_type == "ROLE_SELLER" {
 		return &assets_services.ServiceError{
 			Code: 403,
 			Err:  fmt.Errorf("bạn không có quyền sửa voucher này"),
@@ -285,25 +294,48 @@ func (s *service) ListVouchersForUser(ctx context.Context, userID string, filter
 
 	// 3. Gộp cả hai danh sách và loại bỏ trùng lặp (nếu có)
 	// Dùng map để đảm bảo ID voucher là duy nhất
-	voucherMap := make(map[string]db.Vouchers)
+	combinedVouchers := make([]db.Vouchers, 0)
+	combinedVouchers = append(combinedVouchers, publicVouchers...)
+	combinedVouchers = append(combinedVouchers, assignedVouchers...)
 
-	// Thêm public trước
-	for _, v := range publicVouchers {
-		voucherMap[v.ID] = v
-	}
+	// 3.5 check người dùng còn được dùng voucher này không
+	for i, v := range combinedVouchers {
+		// Mặc định là hợp lệ
+		isValid := true
 
-	// Thêm assigned sau (nếu trùng, nó sẽ ghi đè, điều này ổn)
-	for _, v := range assignedVouchers {
-		voucherMap[v.ID] = v
+		// Gọi Repository đếm số lần user này đã dùng voucher này
+		// (Sử dụng query CountVoucherUsageByUser đã có trong sqlc)
+		usageCount, err := s.repository.CountVoucherUsageByUser(ctx, db.CountVoucherUsageByUserParams{
+			VoucherID: v.ID,
+			UserID:    userID,
+		})
+
+		if err != nil {
+			// Nếu lỗi DB, log lại và tạm thời coi như user chưa dùng (hoặc return lỗi tuỳ chính sách)
+			// Ở đây tôi chọn continue để không làm gãy cả danh sách
+			fmt.Printf("Error checking usage for voucher %s: %v\n", v.ID, err)
+			usageCount = 0
+		}
+
+		// Logic kiểm tra: Đã dùng >= Giới hạn cho phép => Hết lượt (Invalid)
+		if int32(usageCount) >= v.MaxUsagePerUser {
+			isValid = false
+		}
+
+		// (Tuỳ chọn) Kiểm tra thêm điều kiện tổng quan: Voucher đã hết lượt dùng toàn hệ thống chưa?
+		if v.UsedQuantity >= v.TotalQuantity {
+			isValid = false
+		}
+		combinedVouchers[i].IsActive = isValid
+
 	}
 
 	// 4. Chuyển map về slice
-	combinedVouchers := make([]db.Vouchers, 0, len(voucherMap))
-	for _, v := range voucherMap {
-		combinedVouchers = append(combinedVouchers, v)
-	}
-	result := assets_services.NormalizeListSQLNulls(combinedVouchers, "data")
-	return result, nil
+
+	// result := assets_services.NormalizeListSQLNulls(combinedVouchers, "data")
+	return map[string]interface{}{
+		"data": combinedVouchers,
+	}, nil
 }
 
 // --- Hàm Lấy Danh Sách Voucher Cho Admin/Seller Quản Lý ---

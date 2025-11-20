@@ -15,14 +15,18 @@ func (api *apiController) createVoucher() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		// Require auth
 		tokenPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
-
+		shop_id := ctx.Query("shop_id")
+		if shop_id == "" && tokenPayload.Scope == "ROLE_SELLER" {
+			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "shop_id is required for seller"))
+			return
+		}
 		var req services.CreateVoucherRequest
 		if err := ctx.ShouldBindJSON(&req); err != nil {
 			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Invalid request body: "+err.Error()))
 			return
 		}
 
-		if err := api.service.CreateVoucher(ctx, req, tokenPayload.UserId, tokenPayload.Scope); err != nil {
+		if err := api.service.CreateVoucher(ctx, req, shop_id, tokenPayload.Scope); err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return
 		}
@@ -36,6 +40,11 @@ func (api *apiController) updateVoucher() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		// Require auth
 		tokenPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
+		shop_id := ctx.Query("shop_id")
+		if shop_id == "" && tokenPayload.Scope == "ROLE_SELLER" {
+			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "shop_id is required for seller"))
+			return
+		}
 
 		voucherID := ctx.Param("voucherID")
 		if voucherID == "" {
@@ -49,7 +58,7 @@ func (api *apiController) updateVoucher() func(ctx *gin.Context) {
 			return
 		}
 
-		if err := api.service.UpdateVoucher(ctx, voucherID, tokenPayload.UserId, req); err != nil {
+		if err := api.service.UpdateVoucher(ctx, voucherID, shop_id, tokenPayload.Scope, req); err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return
 		}
@@ -93,7 +102,11 @@ func (api *apiController) listVouchersForManagement() func(ctx *gin.Context) {
 			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Invalid query parameters: "+err.Error()))
 			return
 		}
-
+		shop_id := ctx.Query("shop_id")
+		if shop_id == "" && tokenPayload.Scope == "ROLE_SELLER" {
+			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "shop_id is required for seller"))
+			return
+		}
 		// Determine owner_type based on user role
 		var ownerType string
 		if tokenPayload.Scope == "ROLE_ADMIN" {
@@ -105,7 +118,7 @@ func (api *apiController) listVouchersForManagement() func(ctx *gin.Context) {
 			return
 		}
 
-		result, err := api.service.ListVouchersForManagement(ctx, tokenPayload.UserId, ownerType, filter)
+		result, err := api.service.ListVouchersForManagement(ctx, shop_id, ownerType, filter)
 		if err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return

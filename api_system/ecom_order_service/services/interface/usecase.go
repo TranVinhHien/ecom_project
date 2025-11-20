@@ -31,8 +31,8 @@ type Orders interface {
 // Vouchers defines voucher-related use cases
 type Vouchers interface {
 	// Admin/Seller endpoints
-	CreateVoucher(ctx context.Context, req services.CreateVoucherRequest, user_id, user_type string) *assets_services.ServiceError
-	UpdateVoucher(ctx context.Context, voucherID string, user_id string, req services.UpdateVoucherRequest) *assets_services.ServiceError
+	CreateVoucher(ctx context.Context, req services.CreateVoucherRequest, shop_id, user_type string) *assets_services.ServiceError
+	UpdateVoucher(ctx context.Context, voucherID string, shop_id, user_type string, req services.UpdateVoucherRequest) *assets_services.ServiceError
 	ListVouchersForManagement(ctx context.Context, ownerID string, ownerType string, filter services.VoucherManagementFilterRequest) (map[string]interface{}, *assets_services.ServiceError)
 
 	// Customer endpoint

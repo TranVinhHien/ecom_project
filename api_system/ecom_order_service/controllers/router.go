@@ -60,7 +60,10 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 			admin_role.POST("/shop-orders/:shopOrderCode/ship", api.shipShopOrder())
 		}
 		// PUT /api/v1/admin/shop-orders/{shopOrderCode}/status - Cập nhật trạng thái đơn hàng
-		admin.PUT("/update_status", api.updateShopOrderStatus())
+		adminALL := admin.Use(checkRole([]string{"ROLE_ADMIN", "ROLE_SELLER"}))
+		{
+			adminALL.PUT("/update_status", api.updateShopOrderStatus())
+		}
 	}
 
 	// =================================================================

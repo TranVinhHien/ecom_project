@@ -16,8 +16,8 @@ type Orders interface {
 
 	// Admin/Shop endpoints
 	ListShopOrders(ctx context.Context, shopID string, status string, query services.QueryFilter) (map[string]interface{}, *assets_services.ServiceError)
-	ShipShopOrder(ctx context.Context, shopID, shopOrderCode string) *assets_services.ServiceError
-	UpdateShopOrderStatus(ctx context.Context, shopOrderCode, status string) *assets_services.ServiceError
+	// shipShopOrder(ctx context.Context, shopID, shopOrderCode string) *assets_services.ServiceError
+	UpdateShopOrderStatus(ctx context.Context, shop_id, user_type, shopOrderCode, status string, reason string) *assets_services.ServiceError
 	CallbackPaymentOnline(ctx context.Context, OrderID string) *assets_services.ServiceError
 
 	// Get total sold quantity for given product IDs

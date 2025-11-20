@@ -68,14 +68,14 @@ func (s *service) GetProductTotalSold(ctx context.Context, productID []string) (
 }
 
 // ShipShopOrder đánh dấu shop order đã được ship
-func (s *service) ShipShopOrder(ctx context.Context, shopID, shopOrderID string) *assets_services.ServiceError {
+func (s *service) shipShopOrder(ctx context.Context, shopID, user_role, shopOrderID string) *assets_services.ServiceError {
 	// Lấy shop order
 	shopOrder, err := s.repository.GetShopOrderByID(ctx, shopOrderID)
 	if err != nil {
 		return assets_services.NewError(500, fmt.Errorf("lỗi khi lấy shop orders: %w", err))
 	}
 	// Verify shop order belongs to this shop
-	if shopOrder.ShopID != shopID {
+	if shopOrder.ShopID != shopID && user_role != "ROLE_ADMIN" {
 		return assets_services.NewError(403, fmt.Errorf("bạn không có quyền cập nhật đơn hàng này"))
 	}
 
@@ -126,7 +126,7 @@ func (s *service) ShipShopOrder(ctx context.Context, shopID, shopOrderID string)
 }
 
 // UpdateShopOrderStatus cập nhật status của shop order (generic method)
-func (s *service) UpdateShopOrderStatus(ctx context.Context, shopOrderID, status string) *assets_services.ServiceError {
+func (s *service) UpdateShopOrderStatus(ctx context.Context, shopID, user_role, shopOrderID, status string, reason string) *assets_services.ServiceError {
 	// Lấy shop order
 	shopOrder, err := s.repository.GetShopOrderByID(ctx, shopOrderID)
 
@@ -137,33 +137,37 @@ func (s *service) UpdateShopOrderStatus(ctx context.Context, shopOrderID, status
 	// Update status based on target status
 	switch status {
 	case "PROCESSING":
+		// thêm sử lý ở đây
 		if shopOrder.Status != db.ShopOrdersStatusAWAITINGPAYMENT {
 			return assets_services.NewError(400, fmt.Errorf("đơn hàng phải ở trạng thái AWAITING_PAYMENT để chuyển sang PROCESSING"))
 		}
 		if err := s.repository.UpdateShopOrderStatusToProcessing(ctx, shopOrder.ID); err != nil {
 			return assets_services.NewError(500, fmt.Errorf("lỗi khi cập nhật trạng thái: %w", err))
 		}
+		// thêm sử lý ở đây
 	case "CANCELLED":
 		if shopOrder.Status != db.ShopOrdersStatusAWAITINGPAYMENT && shopOrder.Status != db.ShopOrdersStatusPROCESSING {
 			return assets_services.NewError(400, fmt.Errorf("đơn hàng phải ở trạng thái AWAITING_PAYMENT hoặc PROCESSING để chuyển sang CANCELLED"))
 		}
 		if err := s.repository.UpdateShopOrderStatusToCancelled(ctx, db.UpdateShopOrderStatusToCancelledParams{
 			ID:                 shopOrder.ID,
-			CancellationReason: sql.NullString{String: "Cancelled by shop", Valid: true},
+			CancellationReason: sql.NullString{String: reason, Valid: true},
 		}); err != nil {
 			return assets_services.NewError(500, fmt.Errorf("lỗi khi cập nhật trạng thái: %w", err))
 		}
+		// đã sử lys song
 	case "SHIPPED":
 		if shopOrder.Status != db.ShopOrdersStatusPROCESSING {
 			return assets_services.NewError(400, fmt.Errorf("đơn hàng phải ở trạng thái PROCESSING để chuyển sang SHIPPED"))
 		}
-		if err := s.repository.UpdateShopOrderStatusToShipped(ctx, db.UpdateShopOrderStatusToShippedParams{
-			ID: shopOrder.ID,
-			// TrackingCode:   req.TrackingCode,
-			// ShippingMethod: req.ShippingMethod,
-		}); err != nil {
-			return assets_services.NewError(500, fmt.Errorf("lỗi khi cập nhật trạng thái: %w", err))
+		shipShopOrderErr := s.shipShopOrder(ctx, shopID, user_role, shopOrderID)
+		// if err := s.repository.UpdateShopOrderStatusToShipped(ctx, db.UpdateShopOrderStatusToShippedParams{
+		// 	ID: shopOrder.ID,
+		// });
+		if shipShopOrderErr != nil {
+			return assets_services.NewError(500, fmt.Errorf("lỗi khi cập nhật trạng thái: %w", shipShopOrderErr))
 		}
+		// thêm sử lý ở đây
 	case "COMPLETED":
 		if shopOrder.Status != db.ShopOrdersStatusSHIPPED {
 			return assets_services.NewError(400, fmt.Errorf("đơn hàng phải ở trạng thái SHIPPED để chuyển sang COMPLETED"))
@@ -171,6 +175,7 @@ func (s *service) UpdateShopOrderStatus(ctx context.Context, shopOrderID, status
 		if err := s.repository.UpdateShopOrderStatusToCompleted(ctx, shopOrder.ID); err != nil {
 			return assets_services.NewError(500, fmt.Errorf("lỗi khi cập nhật trạng thái: %w", err))
 		}
+		// thêm sử lý ở đây
 	case "REFUNDED":
 		if shopOrder.Status != db.ShopOrdersStatusCOMPLETED {
 			return assets_services.NewError(400, fmt.Errorf("đơn hàng phải ở trạng thái COMPLETED để chuyển sang REFUNDED"))

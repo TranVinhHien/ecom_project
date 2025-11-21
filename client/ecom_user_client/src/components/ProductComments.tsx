@@ -73,7 +73,6 @@ export default function ProductComments({ productId }: ProductCommentsProps) {
     },
     enabled: isExpanded, // Fetch when expanded
   });
-  console.log("Comments Data:", data,productId);
   // Update allComments when data changes
   React.useEffect(() => {
     if (data?.result?.data) {

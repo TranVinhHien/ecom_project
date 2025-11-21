@@ -10,6 +10,7 @@ type ReadENV struct {
 	DBSourceOrder       string   `mapstructure:"DB_SOURCE_ORDER"`
 	DBSourceTransaction string   `mapstructure:"DB_SOURCE_TRANSACTION"`
 	DBSourceInteract    string   `mapstructure:"DB_SOURCE_INTERACT"`
+	DBSourceAgentAIDB   string   `mapstructure:"DB_SOURCE_AGENT_AI_DB"`
 	HTTPServerAddress   string   `mapstructure:"HTTP_SERVER_ADDRESS"`
 	JWTSecret           string   `mapstructure:"JWT_SECRET"`
 	ClientIP            []string `mapstructure:"CLIENT_IP"`

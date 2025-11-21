@@ -68,6 +68,18 @@ func main() {
 	log.Info().Msg("Connect to database interact successfully")
 	db_interact := db.NewStoreInteract(conn_interact)
 
+	// create connect to interact database
+	conn_agent_ai_db, err := connectDBWithRetry(5, env.DBSourceAgentAIDB)
+	if conn_agent_ai_db == nil {
+		log.Err(err).Msg("Error when created connect to database interact")
+		return
+	}
+	// close connection after gin stopped
+	defer conn_agent_ai_db.Close()
+
+	log.Info().Msg("Connect to database interact successfully")
+	db_agent_ai_db := db.NewStoreAgentAIDB(conn_agent_ai_db)
+
 	log.Info().Msg("Creating gin server...")
 	// create jwt
 	jwtMaker, err := token.NewJWTMaker(env.JWTSecret)
@@ -80,7 +92,7 @@ func main() {
 	APIServer := server.NewAPIServices(env, time.Second*10)
 
 	// setup service
-	services := services.NewService(db_order, db_transaction, db_interact, jwtMaker, env, APIServer)
+	services := services.NewService(db_order, db_transaction, db_interact, db_agent_ai_db, jwtMaker, env, APIServer)
 	// setup controller
 	controller := controllers.NewAPIController(services, jwtMaker)
 

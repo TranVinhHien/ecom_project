@@ -99,6 +99,14 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 		platform.GET("/customer-support/feedbacks", api.listCustomerFeedbacks())
 		platform.GET("/customer-support/feedbacks/:id", api.getCustomerFeedbackDetail())
 
+		// Nhóm 9: Thống kê Agent Analytics (AI Agent)
+		platform.GET("/agent-analytics/dashboard", api.getDashboardStats())
+		platform.GET("/agent-analytics/message-volume", api.getMessageVolumeByHour())
+		platform.GET("/agent-analytics/top-users", api.getTopActiveUsers())
+		platform.GET("/agent-analytics/topics", api.getTopicStats())
+		platform.GET("/agent-analytics/purchase-intent", api.getPurchaseIntentStats())
+		platform.GET("/agent-analytics/top-categories", api.getTopMentionedCategories())
+
 	}
 
 	// === Nhóm III: API Công khai (Public) ===

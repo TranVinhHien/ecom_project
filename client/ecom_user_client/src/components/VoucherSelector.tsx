@@ -115,6 +115,17 @@ export default function VoucherSelector({
   // Sort vouchers by discount value (highest first)
   const sortVouchersByValue = (vouchers: Voucher[], applicableAmount: number): Voucher[] => {
     return [...vouchers].sort((a, b) => {
+      // Kiểm tra trạng thái inactive
+      const aIsUsedUp = a.used_quantity >= a.total_quantity;
+      const aIsInactive = !a.is_active || aIsUsedUp;
+      const bIsUsedUp = b.used_quantity >= b.total_quantity;
+      const bIsInactive = !b.is_active || bIsUsedUp;
+
+      // Voucher inactive xuống dưới cùng
+      if (aIsInactive && !bIsInactive) return 1;
+      if (!aIsInactive && bIsInactive) return -1;
+
+      // Nếu cả 2 đều inactive hoặc đều active, sắp xếp theo giá trị giảm
       const discountA = calculateDiscount(a, applicableAmount);
       const discountB = calculateDiscount(b, applicableAmount);
       return discountB - discountA; // Descending order
@@ -130,6 +141,8 @@ export default function VoucherSelector({
   ) => {
     const discount = applicableAmount ? calculateDiscount(voucher, applicableAmount) : 0;
     const eligible = applicableAmount ? isVoucherEligible(voucher, applicableAmount) : false;
+    const isUsedUp = voucher.used_quantity >= voucher.total_quantity;
+    const isInactive = !voucher.is_active || isUsedUp;
 
     return (
       <Card
@@ -137,10 +150,18 @@ export default function VoucherSelector({
         className={cn(
           "relative overflow-hidden transition-all",
           isApplied && "border-antique-gold border-2",
-          !eligible && "opacity-50"
+          !eligible && "opacity-50",
+          isInactive && "opacity-60 bg-gray-50"
         )}
       >
         <CardContent className="p-4">
+          {isInactive && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+              <p className="text-gray-500 font-medium line-through">
+                Bạn đã dùng hết lượt của voucher này
+              </p>
+            </div>
+          )}
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
               {/* Voucher Icon & Code */}
@@ -198,7 +219,7 @@ export default function VoucherSelector({
 
             {/* Apply Button */}
             <div className="flex flex-col items-end gap-2">
-              {canApply && eligible ? (
+              {canApply && eligible && !isInactive ? (
                 <Button
                   size="sm"
                   variant={isApplied ? "outline" : "default"}
@@ -216,7 +237,7 @@ export default function VoucherSelector({
                 </Button>
               ) : (
                 <Button size="sm" variant="ghost" disabled className="min-w-[80px]">
-                  Không thể dùng
+                  {isInactive ? "Hết lượt" : "Không thể dùng"}
                 </Button>
               )}
             </div>

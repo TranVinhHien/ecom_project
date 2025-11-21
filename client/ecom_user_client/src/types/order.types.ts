@@ -5,21 +5,33 @@ export interface OrderItemPayload {
   quantity: number;
 }
 
+export interface VoucherShopRequest {
+  voucher_id: string;
+  shop_id: string;
+}
+
 export interface ShippingAddress {
   fullName: string;
   phone: string;
   address: string;
-  district: string;
-  city: string;
-  postalCode: string;
+  ward?: string;
+  district?: string;
+  wardId?: string;
+  districtId?: string;
+  provinceId?: string;
+  city?: string;
+  postalCode?: string;
 }
 
 export interface CreateOrderPayload {
   shippingAddress: ShippingAddress;
   paymentMethod: string; // UUID của payment method (COD, MoMo, etc.)
   items: OrderItemPayload[];
-  vouchers: string[]; // Array of voucher codes
-  note: string; // Ghi chú đơn hàng
+  note?: string; // Ghi chú đơn hàng (optional)
+  voucher_shop?: VoucherShopRequest[]; // Vouchers của shop
+  voucher_site_id?: string; // Voucher sàn giảm giá đơn hàng
+  voucher_shipping_id?: string; // Voucher sàn freeship
+  sku_in_cart?: string[]; // Danh sách SKU trong giỏ hàng (nếu có)
 }
 
 export interface CreateOrderSuccessResponse {

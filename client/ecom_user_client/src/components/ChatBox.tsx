@@ -60,6 +60,7 @@ export default function ChatBox() {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [currentProductKey, setCurrentProductKey] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const isInitialized = useRef(false);
@@ -199,28 +200,16 @@ export default function ChatBox() {
         throw new Error("Token not found");
       }
 
-      // Extract product key from pathname if on product detail page
-      let currentProductKey: string | null = null;
-      if (pathname && pathname.includes('/product/')) {
-        const pathParts = pathname.split('/product/');
-        if (pathParts[1]) {
-          currentProductKey = pathParts[1].split('?')[0]; // Remove query params if any
-        }
-      }
-
-      // Use productKey from store or extract from current pathname
-      const finalProductKey = productKey || currentProductKey;
-
       const requestBody: any = {
         message: inputMessage,
         session_id: sessionId,
       };
 
-      // Add product_key if available
-      if (finalProductKey) {
-        requestBody.product_key = finalProductKey;
+      // Add product_key only if it exists (from handleAskAI)
+      if (currentProductKey) {
+        requestBody.product_key = currentProductKey;
       }
-
+      console.log("Request Body:", requestBody, "currentProductKey:", currentProductKey); // Debug log
       const response = await fetch(`${API.base_agent}${API.agent.message}`, {
         method: "POST",
         headers: {
@@ -245,6 +234,10 @@ export default function ChatBox() {
         };
         
         setMessages((prev) => [...prev, botMessage]);
+        
+        // Clear productKey after successful message send
+        setCurrentProductKey(null);
+        
         if (data.response.category){
         const url = generateComplaintUrl(
           {
@@ -296,6 +289,10 @@ export default function ChatBox() {
   useEffect(() => {
     if (isOpen && pendingMessage && sessionId) {
       setInputMessage(pendingMessage);
+      // Save productKey to local state before clearing
+      if (productKey) {
+        setCurrentProductKey(productKey);
+      }
       clearPendingMessage();
       // Auto send the message
       setTimeout(() => {

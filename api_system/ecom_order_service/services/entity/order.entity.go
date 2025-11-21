@@ -42,8 +42,9 @@ type CreateOrderRequest struct {
 	Note        *string              `json:"note"`
 	VoucherShop []VoucherShopRequest `json:"voucher_shop"`
 	// Email             string               `json:"email" binding:"required,email"`
-	VoucherSiteID     *string `json:"voucher_site_id"` // Có thể là
-	VoucherShippingID *string `json:"voucher_shipping_id"`
+	VoucherSiteID     *string  `json:"voucher_site_id"` // Có thể là
+	VoucherShippingID *string  `json:"voucher_shipping_id"`
+	SKUInCart         []string `json:"sku_in_cart"` // Danh sách SKU trong giỏ hàng để xóa sau khi tạo đơn
 }
 
 // OrderItemRequest đại diện cho một item trong đơn hàng
@@ -51,19 +52,6 @@ type OrderItemRequest struct {
 	SkuID    string `json:"sku_id" binding:"required"`
 	ShopID   string `json:"shop_id" binding:"required"`
 	Quantity int    `json:"quantity" binding:"required,min=1"`
-}
-type VoucherType string
-
-const (
-	VoucherTypeShop  = "SHOP_VOUCHER"
-	VoucherTypeShip  = "SHIPPING_VOUCHER"
-	VoucherTypeOrder = "ORDER_VOUCHER"
-)
-
-type AppliedVoucherInfo struct {
-	Voucher        db.Vouchers
-	DiscountAmount float64
-	ShopOrderID    string // Rỗng nếu là voucher Sàn/Ship
 }
 
 // VoucherRequest đại diện cho voucher trong đơn hàng
@@ -81,6 +69,20 @@ type ShippingAddress struct {
 	District   *string `json:"district"`
 	City       *string `json:"city"`
 	PostalCode *string `json:"postalCode"`
+}
+
+type VoucherType string
+
+const (
+	VoucherTypeShop  = "SHOP_VOUCHER"
+	VoucherTypeShip  = "SHIPPING_VOUCHER"
+	VoucherTypeOrder = "ORDER_VOUCHER"
+)
+
+type AppliedVoucherInfo struct {
+	Voucher        db.Vouchers
+	DiscountAmount float64
+	ShopOrderID    string // Rỗng nếu là voucher Sàn/Ship
 }
 
 // PaymentMethod đại diện cho phương thức thanh toán

@@ -83,7 +83,7 @@ CREATE TABLE `order_items` (
   `original_unit_price` DECIMAL(15, 2) NOT NULL COMMENT 'Giá gốc của 1 sản phẩm (trước khi giảm)',
   `final_unit_price` DECIMAL(15, 2) NOT NULL COMMENT 'Giá bán cuối cùng của 1 sản phẩm (sau khi giảm)',
   `total_price` DECIMAL(15, 2) NOT NULL COMMENT 'Tổng tiền cho item này (final_unit_price * quantity)',
-  `promotions_snapshot` JSON DEFAULT NULL COMMENT 'Bản ghi nhanh các chương trình khuyến mãi đã áp dụng dạng JSON',
+  `promotions_snapshot` TEXT  COMMENT 'Bản ghi nhanh các chương trình khuyến mãi đã áp dụng dạng JSON',
 
   -- Dữ liệu "đóng băng" của sản phẩm
   `product_name_snapshot` TEXT NOT NULL COMMENT 'Tên sản phẩm tại thời điểm mua',

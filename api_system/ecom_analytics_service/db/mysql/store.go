@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 
+	db_agent_ai_db "github.com/TranVinhHien/ecom_analytics_service/db/sqlc/agent_ai_db"
 	db_interact "github.com/TranVinhHien/ecom_analytics_service/db/sqlc/interact"
 	db_order "github.com/TranVinhHien/ecom_analytics_service/db/sqlc/order"
 	db_transaction "github.com/TranVinhHien/ecom_analytics_service/db/sqlc/transaction"
@@ -58,6 +59,24 @@ type StoreInteract interface {
 func NewStoreInteract(connectPool *sql.DB) StoreInteract {
 	return &SQLStoreInteract{
 		Queries:  db_interact.New(connectPool),
+		connPool: connectPool,
+	}
+}
+
+type SQLStoreAgentAIDB struct {
+	*db_agent_ai_db.Queries
+	connPool *sql.DB
+}
+
+type StoreAgentAIDB interface {
+	db_agent_ai_db.Querier
+}
+
+// create new store
+
+func NewStoreAgentAIDB(connectPool *sql.DB) StoreAgentAIDB {
+	return &SQLStoreAgentAIDB{
+		Queries:  db_agent_ai_db.New(connectPool),
 		connPool: connectPool,
 	}
 }

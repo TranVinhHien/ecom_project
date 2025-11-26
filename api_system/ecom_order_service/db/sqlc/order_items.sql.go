@@ -128,7 +128,6 @@ const getProductTotalSold = `-- name: GetProductTotalSold :many
 
 
 
-
 SELECT
   oi.product_id,
 CAST(COALESCE(SUM(oi.quantity), 0) AS SIGNED) AS total_sold

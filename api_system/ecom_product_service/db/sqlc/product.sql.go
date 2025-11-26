@@ -12,53 +12,45 @@ import (
 )
 
 const countProductsAdvanced = `-- name: CountProductsAdvanced :one
-SELECT COUNT(*) AS total
-FROM (
-  SELECT 
-    p.id
-  FROM product p
-  LEFT JOIN product_sku ps ON ps.product_id = p.id
-  LEFT JOIN category c ON p.category_id = c.category_id
-  LEFT JOIN brand b ON p.brand_id = b.brand_id
-  WHERE
-    (? IS NULL OR b.code = ?)
-    AND (? IS NULL OR c.path =  ?)
+SELECT COUNT(*)
+FROM product p
+WHERE 
+    p.delete_status = 'Active'
     AND (? IS NULL OR p.shop_id = ?)
+    AND (? IS NULL OR p.category_id = ?)
+    AND (? IS NULL OR p.brand_id = ?)
+    AND (? IS NULL OR p.min_price >= ?)
+    AND (? IS NULL OR p.min_price <= ?)
     AND (? IS NULL OR p.name LIKE CONCAT('%', ?, '%'))
-  GROUP BY p.id
-  HAVING
-    (? IS NULL OR MAX(ps.price) >= ?)
-    AND (? IS NULL OR MIN(ps.price) <= ?)
-) AS t
 `
 
 type CountProductsAdvancedParams struct {
-	BrandCode    sql.NullString  `json:"brand_code"`
-	CategoryPath sql.NullString  `json:"category_path"`
-	ShopID       sql.NullString  `json:"shop_id"`
-	Keyword      interface{}     `json:"keyword"`
-	PriceMin     sql.NullFloat64 `json:"price_min"`
-	PriceMax     sql.NullFloat64 `json:"price_max"`
+	ShopID     sql.NullString  `json:"shop_id"`
+	CategoryID sql.NullString  `json:"category_id"`
+	BrandID    sql.NullString  `json:"brand_id"`
+	PriceMin   sql.NullFloat64 `json:"price_min"`
+	PriceMax   sql.NullFloat64 `json:"price_max"`
+	Keyword    interface{}     `json:"keyword"`
 }
 
 func (q *Queries) CountProductsAdvanced(ctx context.Context, arg CountProductsAdvancedParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countProductsAdvanced,
-		arg.BrandCode,
-		arg.BrandCode,
-		arg.CategoryPath,
-		arg.CategoryPath,
 		arg.ShopID,
 		arg.ShopID,
-		arg.Keyword,
-		arg.Keyword,
+		arg.CategoryID,
+		arg.CategoryID,
+		arg.BrandID,
+		arg.BrandID,
 		arg.PriceMin,
 		arg.PriceMin,
 		arg.PriceMax,
 		arg.PriceMax,
+		arg.Keyword,
+		arg.Keyword,
 	)
-	var total int64
-	err := row.Scan(&total)
-	return total, err
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const createProduct = `-- name: CreateProduct :exec
@@ -297,7 +289,7 @@ func (q *Queries) GetProductByKey(ctx context.Context, key string) (GetProductBy
 }
 
 const getProductIDs = `-- name: GetProductIDs :many
-SELECT id, name, ` + "`" + `key` + "`" + `, description, short_description, brand_id, category_id, shop_id, image, media, delete_status, product_is_permission_return, product_is_permission_check, create_date, update_date, create_by, update_by, total_sold FROM product 
+SELECT id, name, ` + "`" + `key` + "`" + `, description, short_description, brand_id, category_id, shop_id, image, media, delete_status, product_is_permission_return, product_is_permission_check, create_date, update_date, create_by, update_by, total_sold, min_price, max_price FROM product 
 WHERE id IN (/*SLICE:product_ids*/?)
 `
 
@@ -339,6 +331,8 @@ func (q *Queries) GetProductIDs(ctx context.Context, productIds []string) ([]Pro
 			&i.CreateBy,
 			&i.UpdateBy,
 			&i.TotalSold,
+			&i.MinPrice,
+			&i.MaxPrice,
 		); err != nil {
 			return nil, err
 		}
@@ -385,62 +379,62 @@ func (q *Queries) IncrementProductTotalSold(ctx context.Context, arg IncrementPr
 }
 
 const listProductsAdvanced = `-- name: ListProductsAdvanced :many
-SELECT
-  p.id,
-  p.name,
-  p.` + "`" + `key` + "`" + `,
-  p.description,
-  p.short_description,
-  p.brand_id,
-  p.category_id,
-  p.shop_id,
-  p.image,
-  p.media,
-  p.delete_status,
-  p.product_is_permission_return,
-  p.product_is_permission_check,
-  p.create_date,
-  p.update_date,
-  p.create_by,
-  p.update_by,
-  p.total_sold,
-  COALESCE(MIN(ps.price), 0)  AS min_price,
-  COALESCE(MAX(ps.price), 0)  AS max_price,
-  (SELECT id FROM product_sku WHERE product_id = p.id ORDER BY price ASC  LIMIT 1) AS min_price_sku_id,
-  (SELECT id FROM product_sku WHERE product_id = p.id ORDER BY price DESC LIMIT 1) AS max_price_sku_id
+SELECT 
+    p.id,
+    p.name,
+    p.` + "`" + `key` + "`" + `,
+    p.description,
+    p.short_description,
+    p.brand_id,
+    p.category_id,
+    p.shop_id,
+    p.image,
+    p.media,
+    p.delete_status,
+    p.product_is_permission_return,
+    p.product_is_permission_check,
+    p.create_date,
+    p.update_date,
+    p.create_by,
+    p.update_by,
+    p.total_sold,
+    p.min_price,
+    p.max_price,
+    -- Subquery lấy SKU ID đại diện (giữ nguyên logic tối ưu)
+    (SELECT ps.id FROM product_sku ps WHERE ps.product_id = p.id ORDER BY ps.price ASC LIMIT 1) AS min_price_sku_id,
+    (SELECT ps.id FROM product_sku ps WHERE ps.product_id = p.id ORDER BY ps.price DESC LIMIT 1) AS max_price_sku_id
 FROM product p
-LEFT JOIN product_sku ps ON ps.product_id = p.id
-LEFT JOIN category c ON p.category_id = c.category_id
-LEFT JOIN brand b ON p.brand_id = b.brand_id
-WHERE
-  (? IS NULL OR b.code = ?)
-  AND (? IS NULL OR c.path =  ?)
-  AND (? IS NULL OR p.shop_id = ?)
-  AND (? IS NULL OR p.name LIKE CONCAT('%', ?, '%'))
-GROUP BY p.id
-HAVING
-  (? IS NULL OR MAX(ps.price) >= ?)
-  AND (? IS NULL OR MIN(ps.price) <= ?)
-ORDER BY
-  CASE WHEN ? = 'best_sell'  THEN p.total_sold END DESC,
-  CASE WHEN ? = 'price_asc'  THEN MIN(ps.price) END ASC,
-  CASE WHEN ? = 'price_desc' THEN MIN(ps.price) END DESC,
-  CASE WHEN ? = 'name_asc'   THEN p.name END ASC,
-  CASE WHEN ? = 'name_desc'  THEN p.name END DESC,
-  p.create_date DESC
-LIMIT ?, ?
+WHERE 
+    p.delete_status = 'Active'
+    -- Bộ lọc động (Dynamic Filtering)
+    AND (? IS NULL OR p.shop_id = ?)
+    AND (? IS NULL OR p.category_id = ?)
+    AND (? IS NULL OR p.brand_id = ?)
+    AND (? IS NULL OR p.min_price >= ?)
+    AND (? IS NULL OR p.min_price <= ?)
+    -- Tìm kiếm (Lưu ý: Nếu cột name là VARCHAR(255) có index, hiệu năng sẽ tốt hơn TEXT)
+    AND (? IS NULL OR p.name LIKE CONCAT('%', ?, '%'))
+ORDER BY 
+    -- Sắp xếp động (Dynamic Sorting)
+    CASE WHEN ? = 'best_sell'  THEN p.total_sold END DESC,
+    CASE WHEN ? = 'price_asc'  THEN p.min_price END ASC,
+    CASE WHEN ? = 'price_desc' THEN p.min_price END DESC,
+    CASE WHEN ? = 'name_asc'   THEN p.name END ASC,
+    CASE WHEN ? = 'name_desc'  THEN p.name END DESC,
+    p.create_date DESC -- Mặc định sắp xếp theo mới nhất nếu không chọn gì
+LIMIT ? OFFSET ?
 `
 
 type ListProductsAdvancedParams struct {
-	BrandCode    sql.NullString  `json:"brand_code"`
-	CategoryPath sql.NullString  `json:"category_path"`
-	ShopID       sql.NullString  `json:"shop_id"`
-	Keyword      interface{}     `json:"keyword"`
-	PriceMin     sql.NullFloat64 `json:"price_min"`
-	PriceMax     sql.NullFloat64 `json:"price_max"`
-	Sort         interface{}     `json:"sort"`
-	Offset       int32           `json:"offset"`
-	Limit        int32           `json:"limit"`
+	ShopID     sql.NullString  `json:"shop_id"`
+	CategoryID sql.NullString  `json:"category_id"`
+	BrandID    sql.NullString  `json:"brand_id"`
+	PriceMin   sql.NullFloat64 `json:"price_min"`
+	PriceMax   sql.NullFloat64 `json:"price_max"`
+	Keyword    interface{}     `json:"keyword"`
+	Sort       interface{}     `json:"sort"`
+	Limit      int32           `json:"limit"`
+	Offset     int32           `json:"offset"`
 }
 
 type ListProductsAdvancedRow struct {
@@ -462,33 +456,33 @@ type ListProductsAdvancedRow struct {
 	CreateBy                  sql.NullString          `json:"create_by"`
 	UpdateBy                  sql.NullString          `json:"update_by"`
 	TotalSold                 int64                   `json:"total_sold"`
-	MinPrice                  interface{}             `json:"min_price"`
-	MaxPrice                  interface{}             `json:"max_price"`
-	MinPriceSkuID             sql.NullString          `json:"min_price_sku_id"`
-	MaxPriceSkuID             sql.NullString          `json:"max_price_sku_id"`
+	MinPrice                  sql.NullFloat64         `json:"min_price"`
+	MaxPrice                  sql.NullFloat64         `json:"max_price"`
+	MinPriceSkuID             string                  `json:"min_price_sku_id"`
+	MaxPriceSkuID             string                  `json:"max_price_sku_id"`
 }
 
 func (q *Queries) ListProductsAdvanced(ctx context.Context, arg ListProductsAdvancedParams) ([]ListProductsAdvancedRow, error) {
 	rows, err := q.db.QueryContext(ctx, listProductsAdvanced,
-		arg.BrandCode,
-		arg.BrandCode,
-		arg.CategoryPath,
-		arg.CategoryPath,
 		arg.ShopID,
 		arg.ShopID,
-		arg.Keyword,
-		arg.Keyword,
+		arg.CategoryID,
+		arg.CategoryID,
+		arg.BrandID,
+		arg.BrandID,
 		arg.PriceMin,
 		arg.PriceMin,
 		arg.PriceMax,
 		arg.PriceMax,
+		arg.Keyword,
+		arg.Keyword,
 		arg.Sort,
 		arg.Sort,
 		arg.Sort,
 		arg.Sort,
 		arg.Sort,
-		arg.Offset,
 		arg.Limit,
+		arg.Offset,
 	)
 	if err != nil {
 		return nil, err

@@ -143,11 +143,17 @@ func (s *service) GetOrderDetail(ctx context.Context, userID, user_role, orderCo
 }
 
 // SearchOrdersDetail lấy danh sách đơn hàng chi tiết với các bộ lọc
-func (s *service) SearchOrdersDetail(ctx context.Context, user_id string, filter services.ShopOrderSearchFilter) (map[string]interface{}, *assets_services.ServiceError) {
+func (s *service) SearchOrdersDetail(ctx context.Context, user_id string, user_type string, filter services.ShopOrderSearchFilter) (map[string]interface{}, *assets_services.ServiceError) {
 
+	if user_type == "ROLE_USER" && user_id == "" {
+		return nil, assets_services.NewError(403, fmt.Errorf("bạn không có quyền xem đơn hàng này"))
+	}
+	if user_type == "ROLE_ADMIN" || user_type == "ROLE_SELLER" {
+		user_id = ""
+	}
 	// Chuyển đổi filter sang params cho sqlc
 	params := db.SearchShopOrdersParams{
-		UserID: user_id,
+		UserID: sql.NullString{String: user_id, Valid: user_id != ""},
 		Limit:  int32(filter.PageSize),
 		Offset: int32(filter.PageSize * (filter.Page - 1)),
 	}

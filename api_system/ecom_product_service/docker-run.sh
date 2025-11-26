@@ -4,6 +4,9 @@
 
 set -e
 
+# Lấy thư mục của script (đảm bảo đường dẫn tuyệt đối)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Màu sắc cho output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -19,6 +22,7 @@ CONTAINER_NAME="ecom-product-container"
 
 # Build Docker image
 echo -e "${YELLOW}[1/4] Building Docker image...${NC}"
+cd "$SCRIPT_DIR"
 sudo docker build -t ${IMAGE_NAME}:latest .
 echo -e "${GREEN}✓ Docker image built successfully${NC}\n"
 
@@ -30,8 +34,8 @@ echo -e "${GREEN}✓ Cleanup completed${NC}\n"
 
 # Load biến môi trường từ file .env.docker
 echo -e "${YELLOW}[3/4] Loading environment variables from .env.docker...${NC}"
-if [ ! -f .env.docker ]; then
-    echo -e "${RED}✗ File .env.docker không tồn tại!${NC}"
+if [ ! -f "${SCRIPT_DIR}/.env.docker" ]; then
+    echo -e "${RED}✗ File .env.docker không tồn tại tại: ${SCRIPT_DIR}/.env.docker${NC}"
     echo -e "${YELLOW}Tạo .env.docker hoặc cung cấp file trước khi chạy.${NC}"
     exit 1
 fi
@@ -41,9 +45,9 @@ echo -e "${GREEN}✓ Environment variables loaded${NC}\n"
 echo -e "${YELLOW}[4/4] Starting container...${NC}"
 sudo docker run -d \
     --name ${CONTAINER_NAME} \
-    --env-file .env.docker \
+    --env-file "${SCRIPT_DIR}/.env.docker" \
     -p 9001:9001 \
-    -v $(pwd)/images:/app/images \
+    -v "${SCRIPT_DIR}/images:/app/images" \
     --restart unless-stopped \
     ${IMAGE_NAME}:latest
 

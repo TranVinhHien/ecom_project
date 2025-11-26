@@ -32,30 +32,46 @@ func (s *service) GetSKUProduct(ctx context.Context, product_sku_id string) (map
 func (s *service) GetAllProductSimple(ctx context.Context, query services.QueryFilter, category_path, brand_code, shop_id, keywords, sort string, min_price, max_price float64) (map[string]interface{}, *assets_services.ServiceError) {
 	//log.Printf("[GetAllProductSimple] Bắt đầu lấy danh sách sản phẩm - Trang: %d, Kích thước: %d, Danh mục: %s, Thương hiệu: %s, Shop: %s, Từ khóa: %s",
 	//	query.Page, query.PageSize, category_path, brand_code, shop_id, keywords)
+	cate_id := ""
+	brand_id := ""
+	if category_path != "" {
+		category, err := s.repository.GetCategoryByPath(ctx, sql.NullString{String: category_path, Valid: true})
+		if err != nil {
+			return nil, assets_services.NewError(400, fmt.Errorf("không tìm thấy danh mục với đường dẫn: %s. Lỗi: %v", category_path, err))
+		}
+		cate_id = category.CategoryID
+	}
+	if brand_code != "" {
+		brand, err := s.repository.GetBrandByCode(ctx, brand_code)
+		if err != nil {
+			return nil, assets_services.NewError(400, fmt.Errorf("không tìm thấy thương hiệu với mã: %s. Lỗi: %v", brand_code, err))
+		}
+		brand_id = brand.BrandID
+	}
 
-	product_spu, err := s.repository.ListProductsAdvanced(ctx, db.ListProductsAdvancedParams{
-		Limit:        int32(query.PageSize),
-		Offset:       int32((query.Page - 1) * query.PageSize),
-		BrandCode:    sql.NullString{String: brand_code, Valid: brand_code != ""},
-		CategoryPath: sql.NullString{String: category_path, Valid: category_path != ""},
-		ShopID:       sql.NullString{String: shop_id, Valid: shop_id != ""},
-		PriceMin:     sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
-		PriceMax:     sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
-		Keyword:      sql.NullString{String: keywords, Valid: keywords != ""},
-		Sort:         sort,
+	product_spu, err := s.repository.ListProductsDynamic(ctx, db.ListProductsAdvancedParams{
+		Limit:      int32(query.PageSize),
+		Offset:     int32((query.Page - 1) * query.PageSize),
+		BrandID:    sql.NullString{String: brand_id, Valid: brand_id != ""},
+		CategoryID: sql.NullString{String: cate_id, Valid: cate_id != ""},
+		ShopID:     sql.NullString{String: shop_id, Valid: shop_id != ""},
+		PriceMin:   sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
+		PriceMax:   sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
+		Keyword:    sql.NullString{String: keywords, Valid: keywords != ""},
+		Sort:       sql.NullString{String: strings.ToLower(sort), Valid: sort != ""},
 	})
 	if err != nil {
 		//log.Printf("[GetAllProductSimple] LỖI: Không thể lấy danh sách sản phẩm từ database. Chi tiết: %v", err)
 		return nil, assets_services.NewError(400, fmt.Errorf("không thể lấy danh sách sản phẩm. Lỗi: %v", err))
 	}
 
-	totalElements, err := s.repository.CountProductsAdvanced(ctx, db.CountProductsAdvancedParams{
-		BrandCode:    sql.NullString{String: brand_code, Valid: brand_code != ""},
-		CategoryPath: sql.NullString{String: category_path, Valid: category_path != ""},
-		ShopID:       sql.NullString{String: shop_id, Valid: shop_id != ""},
-		PriceMin:     sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
-		PriceMax:     sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
-		Keyword:      sql.NullString{String: keywords, Valid: keywords != ""},
+	totalElements, err := s.repository.CountProductsDynamic(ctx, db.ListProductsAdvancedParams{
+		BrandID:    sql.NullString{String: brand_id, Valid: brand_id != ""},
+		CategoryID: sql.NullString{String: cate_id, Valid: cate_id != ""},
+		ShopID:     sql.NullString{String: shop_id, Valid: shop_id != ""},
+		PriceMin:   sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
+		PriceMax:   sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
+		Keyword:    sql.NullString{String: keywords, Valid: keywords != ""},
 	})
 	if err != nil {
 		//log.Printf("[GetAllProductSimple] LỖI: Không thể đếm tổng số sản phẩm. Chi tiết: %v", err)

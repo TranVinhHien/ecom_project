@@ -17,6 +17,8 @@ type SQLStore struct {
 type Store interface {
 	db.Querier
 	ExecTS(ctx context.Context, fn func(tx db.Querier) error) error
+	ListProductsDynamic(ctx context.Context, params db.ListProductsAdvancedParams) ([]db.ListProductsAdvancedRow, error)
+	CountProductsDynamic(ctx context.Context, params db.ListProductsAdvancedParams) (int64, error)
 }
 
 // create new store

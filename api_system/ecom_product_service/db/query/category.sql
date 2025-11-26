@@ -45,6 +45,9 @@ SELECT * FROM category
 WHERE name LIKE '%' || ? || '%'
 ORDER BY name;
 
+-- name: GetCategoryByPath :one
+SELECT * FROM category
+WHERE path = ? LIMIT 1;
 -- name: UpdateCategoryParent :exec
 UPDATE category
 SET parent = ?

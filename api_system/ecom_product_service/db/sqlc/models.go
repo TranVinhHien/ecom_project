@@ -97,6 +97,8 @@ type Product struct {
 	CreateBy                  sql.NullString          `json:"create_by"`
 	UpdateBy                  sql.NullString          `json:"update_by"`
 	TotalSold                 int64                   `json:"total_sold"`
+	MinPrice                  sql.NullFloat64         `json:"min_price"`
+	MaxPrice                  sql.NullFloat64         `json:"max_price"`
 }
 
 type ProductSku struct {

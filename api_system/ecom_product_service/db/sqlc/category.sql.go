@@ -79,6 +79,25 @@ func (q *Queries) GetCategory(ctx context.Context, categoryID string) (Category,
 	return i, err
 }
 
+const getCategoryByPath = `-- name: GetCategoryByPath :one
+SELECT category_id, name, ` + "`" + `key` + "`" + `, path, parent, image FROM category
+WHERE path = ? LIMIT 1
+`
+
+func (q *Queries) GetCategoryByPath(ctx context.Context, path sql.NullString) (Category, error) {
+	row := q.db.QueryRowContext(ctx, getCategoryByPath, path)
+	var i Category
+	err := row.Scan(
+		&i.CategoryID,
+		&i.Name,
+		&i.Key,
+		&i.Path,
+		&i.Parent,
+		&i.Image,
+	)
+	return i, err
+}
+
 const getRootCategories = `-- name: GetRootCategories :many
 SELECT category_id, name, ` + "`" + `key` + "`" + `, path, parent, image FROM category
 WHERE parent IS NULL

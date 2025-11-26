@@ -1,0 +1,15 @@
+docker run -d   --name mysql_test_hieunang   -p 3307:3306   -e MYSQL_ROOT_PASSWORD=12345   -v mysql_data_vol_test_hieunang:/var/lib/mysql   mysql:8
+
+docker run -d \
+  --name mysql_test_hieunang \
+  --cpus="2.0" \
+  --memory="4g" \
+  --memory-swap="4g" \
+  -p 3307:3306 \
+  -e MYSQL_ROOT_PASSWORD=12345 \
+  -v mysql_data_vol_test_hieunang:/var/lib/mysql \
+  mysql:8 \
+  --innodb-buffer-pool-size=2G \
+  --max-connections=200
+
+k6 run --out web-dashboard --out csv=ket_qua_full.csv test.js

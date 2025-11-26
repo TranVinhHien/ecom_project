@@ -150,9 +150,10 @@ func connectDBWithRetry(times int, dbConfig string) (*sql.DB, error) {
 			log.Err(err).Msg("Can't get connection to database pool")
 		}
 
-		pool.SetMaxOpenConns(10)
-		pool.SetMaxIdleConns(1)
+		pool.SetMaxOpenConns(60)
+		pool.SetMaxIdleConns(60)
 		pool.SetConnMaxLifetime(5 * time.Minute)
+		pool.SetConnMaxIdleTime(2 * time.Minute)
 
 		if err == nil {
 			// Set timezone cho session MySQL

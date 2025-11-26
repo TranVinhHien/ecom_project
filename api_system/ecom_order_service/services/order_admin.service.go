@@ -165,7 +165,7 @@ func (s *service) UpdateShopOrderStatus(ctx context.Context, shopID, user_role, 
 		// 	ID: shopOrder.ID,
 		// });
 		if shipShopOrderErr != nil {
-			return assets_services.NewError(500, fmt.Errorf("lỗi khi cập nhật trạng thái: %w", shipShopOrderErr))
+			return assets_services.NewError(400, fmt.Errorf("lỗi khi cập nhật trạng thái: %w", shipShopOrderErr))
 		}
 		// thêm sử lý ở đây
 	case "COMPLETED":

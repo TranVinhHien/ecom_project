@@ -441,7 +441,7 @@ SELECT shop_orders.id, shop_orders.shop_order_code, shop_orders.order_id, shop_o
 JOIN orders ON shop_orders.order_id = orders.id
 WHERE 
   -- Lọc theo user_id từ bảng orders
-  orders.user_id = ?
+  (? IS NULL OR orders.user_id = ?)
   
   -- Lọc theo status (nếu có)
   AND (? IS NULL OR shop_orders.status = ?)
@@ -491,7 +491,7 @@ LIMIT ? OFFSET ?
 `
 
 type SearchShopOrdersParams struct {
-	UserID         string               `json:"user_id"`
+	UserID         sql.NullString       `json:"user_id"`
 	Status         NullShopOrdersStatus `json:"status"`
 	ShopID         sql.NullString       `json:"shop_id"`
 	MinAmount      sql.NullString       `json:"min_amount"`
@@ -515,6 +515,7 @@ type SearchShopOrdersParams struct {
 
 func (q *Queries) SearchShopOrders(ctx context.Context, arg SearchShopOrdersParams) ([]ShopOrders, error) {
 	rows, err := q.db.QueryContext(ctx, searchShopOrders,
+		arg.UserID,
 		arg.UserID,
 		arg.Status,
 		arg.Status,
@@ -600,7 +601,7 @@ SELECT COUNT(*) FROM shop_orders
 JOIN orders ON shop_orders.order_id = orders.id
 WHERE 
   -- Lọc theo user_id từ bảng orders
-  orders.user_id = ?
+  (? IS NULL OR orders.user_id = ?)
   
   -- Lọc theo status (nếu có)
   AND (? IS NULL OR shop_orders.status = ?)
@@ -638,7 +639,7 @@ WHERE
 `
 
 type SearchShopOrdersCountParams struct {
-	UserID         string               `json:"user_id"`
+	UserID         sql.NullString       `json:"user_id"`
 	Status         NullShopOrdersStatus `json:"status"`
 	ShopID         sql.NullString       `json:"shop_id"`
 	MinAmount      sql.NullString       `json:"min_amount"`
@@ -659,6 +660,7 @@ type SearchShopOrdersCountParams struct {
 
 func (q *Queries) SearchShopOrdersCount(ctx context.Context, arg SearchShopOrdersCountParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, searchShopOrdersCount,
+		arg.UserID,
 		arg.UserID,
 		arg.Status,
 		arg.Status,

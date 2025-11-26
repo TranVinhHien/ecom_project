@@ -1,6 +1,5 @@
 CREATE DATABASE IF NOT EXISTS ecommerce_product_db;
 USE ecommerce_product_db;
--- Thiết lập mã hóa UTF-8
 SET NAMES utf8mb4;
 
 -- 1. Bảng category 
@@ -8,28 +7,30 @@ CREATE TABLE category (
   category_id VARCHAR(36) PRIMARY KEY,
   name NVARCHAR(128) NOT NULL UNIQUE,
   `key` VARCHAR(128) NOT NULL UNIQUE,
-  `path` TEXT ,
+  `path` VARCHAR(500), -- Kiến trúc sư khuyên: Đổi TEXT thành VARCHAR để Index nhanh hơn
   `parent` VARCHAR(36),
   image TEXT,
 
   FOREIGN KEY (parent) REFERENCES category(category_id)
 );
+-- Sửa lỗi 1 & 2: Bỏ dấu nháy đơn, dùng VARCHAR
+CREATE INDEX idx_category_path ON category(`path`);
 
 -- 2. Bảng brand
 CREATE TABLE brand (
   brand_id VARCHAR(36) PRIMARY KEY,
   name NVARCHAR(128) NOT NULL,
-  code VARCHAR(15) NOT NULL UNIQUE,
+  code VARCHAR(15) NOT NULL UNIQUE, -- Đã tự động có Index Unique ở đây
   image TEXT,
   create_date DATETIME DEFAULT NOW(),
   update_date DATETIME DEFAULT NOW()
 );
-
+-- Đã xóa dòng CREATE INDEX idx_brand_code vì bị dư thừa
 
 CREATE TABLE product (
     id VARCHAR(36) PRIMARY KEY,
     name TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-    `key` VARCHAR(500) NOT NULL UNIQUE, -- Dùng cho URL thân thiện (slug)
+    `key` VARCHAR(500) NOT NULL UNIQUE, 
     description TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
     short_description TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
     
@@ -40,9 +41,9 @@ CREATE TABLE product (
 
     -- Hình ảnh đại diện cho SPU
     image TEXT NOT NULL,
-    media TEXT, -- Lưu JSON hoặc danh sách ảnh khác
+    media TEXT, 
 
-    -- Các trường quản lý của 
+    -- Các trường quản lý
     delete_status ENUM('Active', 'Deleted') DEFAULT 'Active',
     product_is_permission_return BOOLEAN DEFAULT TRUE,
     product_is_permission_check BOOLEAN DEFAULT TRUE,
@@ -53,50 +54,65 @@ CREATE TABLE product (
     create_by VARCHAR(128),
     update_by VARCHAR(128),
     total_sold BIGINT NOT NULL DEFAULT 0,
+    
     -- Khóa ngoại
     FOREIGN KEY (brand_id) REFERENCES brand(brand_id),
     FOREIGN KEY (category_id) REFERENCES category(category_id)
 );
 
--- Bảng 3: option_values (Thay thế cho phần `value` trong bảng `attr` ) "ssize quaanf"
--- Dùng để lưu các giá trị cụ thể, ví dụ: 'Đen', 'Trắng', 'M', 'L' 41,42
+CREATE INDEX idx_product_category_optimized 
+ON product (category_id, delete_status, min_price, total_sold);
+
+CREATE INDEX idx_product_shop_optimized 
+ON product (shop_id, delete_status, min_price, total_sold);
+
+CREATE INDEX idx_product_global_filter 
+ON product (delete_status, min_price, create_date);
+
+CREATE INDEX idx_product_createdate 
+ON product (create_date);
+
+CREATE INDEX idx_key
+ON product (`key`);
+
+CREATE FULLTEXT INDEX idx_product_name_fulltext ON product(name);
+-- Bảng 3: option_value
 CREATE TABLE option_value (
     id VARCHAR(36) PRIMARY KEY,
-    option_name TEXT NOT NULL,
+    option_name VARCHAR(100) NOT NULL, -- Kiến trúc sư khuyên: Đổi TEXT thành VARCHAR
     `value` VARCHAR(255) NOT NULL,
     product_id VARCHAR(36) NOT NULL,
-    image TEXT, -- Hình ảnh cho giá trị (ví dụ ảnh swatch màu)
+    image TEXT, 
     FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE CASCADE
 );
+-- Sửa lỗi 1 & 2: Bỏ dấu nháy đơn, đổi TEXT thành VARCHAR để index được
+CREATE INDEX idx_option_value_product_id_name ON option_value(product_id, option_name);
 
--- Bảng 4: product_variants (Tương đương bảng `sku` , nhưng tối ưu hơn)
--- Lưu thông tin cho từng phiên bản sản phẩm cụ thể (SKU)
+-- Bảng 4: product_sku
 CREATE TABLE product_sku (
     id VARCHAR(36) PRIMARY KEY,
     product_id VARCHAR(36) NOT NULL,
-    sku_code VARCHAR(100) NOT NULL UNIQUE, -- Mã SKU người dùng tự đặt, dễ nhận biết
+    sku_code VARCHAR(100) NOT NULL UNIQUE, 
 
-    -- Giá và tồn kho thuộc về SKU
     price DOUBLE NOT NULL DEFAULT 0 CHECK (price >= 0),
     quantity INT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
     quantity_reserver INT NOT NULL DEFAULT 0 CHECK (quantity_reserver >= 0),
-    sku_name TEXT ,
-    -- cân nặng  từng sản phẩm 
-    weight DOUBLE NOT NULL DEFAULT 0 CHECK (weight >= 0), -- Cân nặng (kg)
+    sku_name TEXT,
+    weight DOUBLE NOT NULL DEFAULT 0 CHECK (weight >= 0), 
 
-    -- Các trường theo dõi 
     create_date DATETIME DEFAULT NOW(),
     update_date DATETIME DEFAULT NOW() ON UPDATE NOW(),
     FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE CASCADE
 );
+-- Index này OK
+CREATE INDEX idx_product_sku_product_id_price ON product_sku(product_id, price);
 
--- Bảng 5: variant_values (Tương đương bảng `sku_attr` , nhưng hiệu quả hơn)
--- Bảng trung gian để kết nối một SKU với các giá trị thuộc tính của nó
+-- Bảng 5: sku_attr
 CREATE TABLE sku_attr (
     sku_id VARCHAR(36) NOT NULL,
     option_value_id VARCHAR(36) NOT NULL,
     product_id VARCHAR(36) NOT NULL,
-    PRIMARY KEY (sku_id, option_value_id), -- Khóa chính kết hợp để đảm bảo không trùng lặp
+    PRIMARY KEY (sku_id, option_value_id), 
     FOREIGN KEY (sku_id) REFERENCES product_sku(id) ON DELETE CASCADE,
     FOREIGN KEY (option_value_id) REFERENCES option_value(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE CASCADE

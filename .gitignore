@@ -10,6 +10,8 @@ __pycache__/
 *.so
 .Python
 
+# docker compose
+docker-compose.yaml
 # Virtual environments
 *.venv/
 venv/

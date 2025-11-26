@@ -147,7 +147,7 @@ SELECT shop_orders.* FROM shop_orders
 JOIN orders ON shop_orders.order_id = orders.id
 WHERE 
   -- Lọc theo user_id từ bảng orders
-  orders.user_id = sqlc.arg('user_id')
+  (sqlc.narg('user_id') IS NULL OR orders.user_id = sqlc.narg('user_id'))
   
   -- Lọc theo status (nếu có)
   AND (sqlc.narg('status') IS NULL OR shop_orders.status = sqlc.narg('status'))
@@ -200,7 +200,7 @@ SELECT COUNT(*) FROM shop_orders
 JOIN orders ON shop_orders.order_id = orders.id
 WHERE 
   -- Lọc theo user_id từ bảng orders
-  orders.user_id = sqlc.arg('user_id')
+  (sqlc.narg('user_id') IS NULL OR orders.user_id = sqlc.narg('user_id'))
   
   -- Lọc theo status (nếu có)
   AND (sqlc.narg('status') IS NULL OR shop_orders.status = sqlc.narg('status'))

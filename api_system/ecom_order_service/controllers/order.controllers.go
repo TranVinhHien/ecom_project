@@ -260,7 +260,7 @@ func (api *apiController) searchOrdersDetail() func(ctx *gin.Context) {
 		}
 
 		// Call service
-		result, errSvc := api.service.SearchOrdersDetail(ctx, authPayload.Sub, filter)
+		result, errSvc := api.service.SearchOrdersDetail(ctx, authPayload.Sub, authPayload.Scope, filter)
 		if errSvc != nil {
 			ctx.JSON(errSvc.Code, assets_api.ResponseError(errSvc.Code, errSvc.Error()))
 			return

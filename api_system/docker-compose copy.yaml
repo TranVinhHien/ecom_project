@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # 1. Product Service
+  product_service:
+    container_name: ecom-product-container
+    build:
+      context: ./ecom_product_service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9001:9001"
+    networks:
+      - app-network
+    volumes:
+      - ./ecom_product_service/images:/app/images
+    environment:
+
+
+  # 2. Order Service
+  order_service:
+    container_name: ecom-order-container
+    build:
+      context: ./ecom_order_service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9002:9002"
+    networks:
+      - app-network
+    environment:
+  # 3. Payment Service
+  payment_service:
+    container_name: ecom-payment-container
+    build:
+      context: ./ecom_payment_service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9003:9003"
+    networks:
+      - app-network
+    environment:
+    
+  # 4. Analytics Service
+  analytics_service:
+    container_name: ecom-analytics-container
+    build:
+      context: ./ecom_analytics_service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9004:9004"
+    networks:
+      - app-network
+    environment:
+    
+# Cấu hình mạng: Sử dụng mạng app-network đã được tạo bởi file Kafka/DB trước đó
+networks:
+  app-network:
+    name: app-network
+    external: true
+    driver: bridge

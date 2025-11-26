@@ -2,6 +2,9 @@
 # filepath: /home/hienlazada123/project-ecom/ecom_analytics_service/docker-run.sh
 set -e
 
+# Get absolute directory path
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Màu sắc cho output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -28,7 +31,7 @@ echo -e "${GREEN}✓ Cleanup completed${NC}\n"
 
 # Load biến môi trường từ file .env.docker
 echo -e "${YELLOW}[3/4] Loading environment variables from .env.docker...${NC}"
-if [ ! -f .env.docker ]; then
+if [ ! -f "${SCRIPT_DIR}/.env.docker" ]; then
     echo -e "${RED}✗ File .env.docker không tồn tại!${NC}"
     echo -e "${YELLOW}Tạo .env.docker hoặc cung cấp file trước khi chạy.${NC}"
     exit 1

@@ -12,7 +12,7 @@ type Orders interface {
 	CreateOrder(ctx context.Context, userID string, token string, req services.CreateOrderRequest) (map[string]interface{}, *assets_services.ServiceError)
 	ListUserOrders(ctx context.Context, userID string, query services.QueryFilter, status string) (map[string]interface{}, *assets_services.ServiceError)
 	GetOrderDetail(ctx context.Context, userID, user_role, orderCode string) (map[string]interface{}, *assets_services.ServiceError)
-	SearchOrdersDetail(ctx context.Context, userID string, filter services.ShopOrderSearchFilter) (map[string]interface{}, *assets_services.ServiceError)
+	SearchOrdersDetail(ctx context.Context, userID string, user_type string, filter services.ShopOrderSearchFilter) (map[string]interface{}, *assets_services.ServiceError)
 
 	// Admin/Shop endpoints
 	ListShopOrders(ctx context.Context, shopID string, status string, query services.QueryFilter) (map[string]interface{}, *assets_services.ServiceError)

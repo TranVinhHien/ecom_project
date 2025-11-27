@@ -14,8 +14,11 @@ func buildWhereClause(params db.ListProductsAdvancedParams) (string, []interface
 	var args []interface{}
 
 	// 1. Điều kiện cứng
-	conditions = append(conditions, "p.delete_status = 'Active'")
-
+	// conditions = append(conditions, "p.delete_status = 'Active'")
+	if params.DeleteStatus.Valid {
+		conditions = append(conditions, "p.delete_status = ?")
+		args = append(args, params.DeleteStatus.ProductDeleteStatus)
+	}
 	// 2. Các điều kiện động (Chỉ thêm nếu có giá trị)
 	if params.ShopID.Valid {
 		conditions = append(conditions, "p.shop_id = ?")
@@ -73,8 +76,8 @@ func (q *SQLStore) ListProductsDynamic(ctx context.Context, params db.ListProduc
 
 	// C. Build ORDER BY (Whitelist để tránh SQL Injection)
 	orderBy := "ORDER BY p.create_date DESC" // Mặc định
-	if sortStr, ok := params.Sort.(string); ok && sortStr != "" {
-		switch sortStr {
+	if sortStr, ok := params.Sort.(sql.NullString); ok && sortStr.Valid {
+		switch sortStr.String {
 		case "best_sell":
 			orderBy = "ORDER BY p.total_sold DESC"
 		case "price_asc":

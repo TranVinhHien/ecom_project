@@ -29,7 +29,7 @@ func (s *service) GetSKUProduct(ctx context.Context, product_sku_id string) (map
 	//log.Printf("[GetSKUProduct] Thành công lấy thông tin SKU với ID: %s", product_sku_id)
 	return result, nil
 }
-func (s *service) GetAllProductSimple(ctx context.Context, query services.QueryFilter, category_path, brand_code, shop_id, keywords, sort string, min_price, max_price float64) (map[string]interface{}, *assets_services.ServiceError) {
+func (s *service) GetAllProductSimple(ctx context.Context, query services.QueryFilter, category_path, brand_code, shop_id, keywords, sort string, min_price, max_price float64, status string) (map[string]interface{}, *assets_services.ServiceError) {
 	//log.Printf("[GetAllProductSimple] Bắt đầu lấy danh sách sản phẩm - Trang: %d, Kích thước: %d, Danh mục: %s, Thương hiệu: %s, Shop: %s, Từ khóa: %s",
 	//	query.Page, query.PageSize, category_path, brand_code, shop_id, keywords)
 	cate_id := ""
@@ -48,17 +48,26 @@ func (s *service) GetAllProductSimple(ctx context.Context, query services.QueryF
 		}
 		brand_id = brand.BrandID
 	}
-
+	var deleteStatus db.ProductDeleteStatus
+	switch status {
+	case "Pending":
+		deleteStatus = db.ProductDeleteStatusPending
+	case "Deleted":
+		deleteStatus = db.ProductDeleteStatusDeleted
+	default:
+		deleteStatus = db.ProductDeleteStatusActive
+	}
 	product_spu, err := s.repository.ListProductsDynamic(ctx, db.ListProductsAdvancedParams{
-		Limit:      int32(query.PageSize),
-		Offset:     int32((query.Page - 1) * query.PageSize),
-		BrandID:    sql.NullString{String: brand_id, Valid: brand_id != ""},
-		CategoryID: sql.NullString{String: cate_id, Valid: cate_id != ""},
-		ShopID:     sql.NullString{String: shop_id, Valid: shop_id != ""},
-		PriceMin:   sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
-		PriceMax:   sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
-		Keyword:    sql.NullString{String: keywords, Valid: keywords != ""},
-		Sort:       sql.NullString{String: strings.ToLower(sort), Valid: sort != ""},
+		Limit:        int32(query.PageSize),
+		Offset:       int32((query.Page - 1) * query.PageSize),
+		BrandID:      sql.NullString{String: brand_id, Valid: brand_id != ""},
+		DeleteStatus: db.NullProductDeleteStatus{ProductDeleteStatus: deleteStatus, Valid: true},
+		CategoryID:   sql.NullString{String: cate_id, Valid: cate_id != ""},
+		ShopID:       sql.NullString{String: shop_id, Valid: shop_id != ""},
+		PriceMin:     sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
+		PriceMax:     sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
+		Keyword:      sql.NullString{String: keywords, Valid: keywords != ""},
+		Sort:         sql.NullString{String: strings.ToLower(sort), Valid: sort != ""},
 	})
 	if err != nil {
 		//log.Printf("[GetAllProductSimple] LỖI: Không thể lấy danh sách sản phẩm từ database. Chi tiết: %v", err)
@@ -66,12 +75,13 @@ func (s *service) GetAllProductSimple(ctx context.Context, query services.QueryF
 	}
 
 	totalElements, err := s.repository.CountProductsDynamic(ctx, db.ListProductsAdvancedParams{
-		BrandID:    sql.NullString{String: brand_id, Valid: brand_id != ""},
-		CategoryID: sql.NullString{String: cate_id, Valid: cate_id != ""},
-		ShopID:     sql.NullString{String: shop_id, Valid: shop_id != ""},
-		PriceMin:   sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
-		PriceMax:   sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
-		Keyword:    sql.NullString{String: keywords, Valid: keywords != ""},
+		BrandID:      sql.NullString{String: brand_id, Valid: brand_id != ""},
+		CategoryID:   sql.NullString{String: cate_id, Valid: cate_id != ""},
+		ShopID:       sql.NullString{String: shop_id, Valid: shop_id != ""},
+		PriceMin:     sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
+		PriceMax:     sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
+		Keyword:      sql.NullString{String: keywords, Valid: keywords != ""},
+		DeleteStatus: db.NullProductDeleteStatus{ProductDeleteStatus: deleteStatus, Valid: true},
 	})
 	if err != nil {
 		//log.Printf("[GetAllProductSimple] LỖI: Không thể đếm tổng số sản phẩm. Chi tiết: %v", err)
@@ -471,21 +481,58 @@ func (s *service) CreateProduct(ctx context.Context, token, userName string, pro
 
 func (s *service) UpdateProduct(
 	ctx context.Context,
-	token, userName, productID string,
+	role_user, userName, productID string,
+
 	product services.ProductUpdateParams, // Struct chứa dữ liệu JSON
 	mainImage *multipart.FileHeader, // Ảnh chính mới (nếu có)
 	newMediaFiles []*multipart.FileHeader, // Ảnh media mới (nếu có)
 	optionImageUpdates []services.OptionImageUpdate, // Cập nhật ảnh option (nếu có)
 ) *assets_services.ServiceError {
-
+	currentProduct, err := s.repository.GetProduct(ctx, productID) // Giả định hàm này trả về struct có Image, Media (string JSON), etc.
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &assets_services.ServiceError{Code: 404, Err: fmt.Errorf("sản phẩm không tồn tại")} // Lỗi 404 nên được xử lý bên ngoài transaction
+		}
+		return assets_services.NewError(400, fmt.Errorf("lỗi khi lấy thông tin sản phẩm: %w", err))
+	}
 	// kiểm tra ngoại lệ nếu là delete status thì sẽ cập nhật lại sản phẩm trạng thái là xóa
 	if product.DeleteStatus != nil && *product.DeleteStatus {
-		err := s.repository.DeleteProduct(ctx, productID)
+		err := s.repository.UpdateProduct(ctx, db.UpdateProductParams{
+			ID:           productID,
+			DeleteStatus: db.NullProductDeleteStatus{ProductDeleteStatus: db.ProductDeleteStatusDeleted, Valid: true},
+			UpdateBy:     sql.NullString{String: userName, Valid: true},
+		})
 		if err != nil {
 			return assets_services.NewError(400, fmt.Errorf("lỗi khi xóa sản phẩm: %w", err))
 		}
 		return assets_services.NewError(200, fmt.Errorf("xóa sản phẩm thành công"))
 	}
+	if product.ApprovalProduct != nil {
+		if role_user != "ROLE_ADMIN" {
+			return assets_services.NewError(403, fmt.Errorf("bạn không có quyền kiểm duyệt sản phẩm"))
+		}
+		ProductDeleteStatus := db.ProductDeleteStatusDeleted
+		if *product.ApprovalProduct {
+			if currentProduct.DeleteStatus.ProductDeleteStatus == db.ProductDeleteStatusActive {
+				return assets_services.NewError(400, fmt.Errorf("sản phẩm đã được duyệt trước đó"))
+			}
+			if currentProduct.DeleteStatus.ProductDeleteStatus == db.ProductDeleteStatusDeleted {
+				return assets_services.NewError(400, fmt.Errorf("sản phẩm đã bị xóa không thể duyệt"))
+			}
+
+			ProductDeleteStatus = db.ProductDeleteStatusActive
+
+		}
+		err := s.repository.UpdateProduct(ctx, db.UpdateProductParams{
+			ID:           productID,
+			DeleteStatus: db.NullProductDeleteStatus{ProductDeleteStatus: ProductDeleteStatus, Valid: true},
+			UpdateBy:     sql.NullString{String: userName, Valid: true},
+		})
+		if err != nil {
+			return assets_services.NewError(400, fmt.Errorf("lỗi khi xóa sản phẩm: %w", err))
+		}
+	}
+
 	// ----- Bước 1: Upload tất cả ảnh mới LÊN TRƯỚC -----
 	var newMainImageUrl string
 	var newMediaUrls []string
@@ -530,13 +577,6 @@ func (s *service) UpdateProduct(
 	// ----- Bước 2: Thực hiện update trong transaction -----
 	txErr := s.repository.ExecTS(ctx, func(tx db.Querier) error {
 		// 2.1 Lấy thông tin sản phẩm hiện tại (bao gồm ảnh)
-		currentProduct, err := tx.GetProduct(ctx, productID) // Giả định hàm này trả về struct có Image, Media (string JSON), etc.
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return fmt.Errorf("sản phẩm không tồn tại") // Lỗi 404 nên được xử lý bên ngoài transaction
-			}
-			return fmt.Errorf("lỗi khi lấy thông tin sản phẩm hiện tại: %w", err)
-		}
 
 		updateProductParams := db.UpdateProductParams{
 			ID:       productID,

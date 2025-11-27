@@ -16,7 +16,7 @@ type Categories interface {
 }
 type Products interface {
 	UpdateSKUReserverProduct(ctx context.Context, productSKU []services.ProductUpdateSKUReserver, type_req services.ProductUpdateType) *assets_services.ServiceError
-	GetAllProductSimple(ctx context.Context, query services.QueryFilter, category_path, brand_code, shop_id, keywords, sort string, min_price, max_price float64) (map[string]interface{}, *assets_services.ServiceError)
+	GetAllProductSimple(ctx context.Context, query services.QueryFilter, category_path, brand_code, shop_id, keywords, sort string, min_price, max_price float64, status string) (map[string]interface{}, *assets_services.ServiceError)
 	GetDetailProduct(ctx context.Context, productSpuID string) (map[string]interface{}, *assets_services.ServiceError)
 	CreateProduct(ctx context.Context, token, userName string, product services.ProductParams, image *multipart.FileHeader, mediaFiles []*multipart.FileHeader, optionImages []struct {
 		OptionName string

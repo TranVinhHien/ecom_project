@@ -1,3 +1,4 @@
+import API from "../configs/api";
 
   // Helper để xử lý image URL
   const getImageUrl = (imageUrl: string | null | undefined) => {
@@ -7,7 +8,7 @@
       return imageUrl;
     }
     // Nếu không có protocol, thêm http:// vào đầu
-    return `http://${imageUrl}`;
+    return `${API.base_product}/media/${imageUrl}`;
   };
   // Format giá
   const formatPrice = (price: number) => {

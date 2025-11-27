@@ -13,6 +13,7 @@ import (
 type ProductDeleteStatus string
 
 const (
+	ProductDeleteStatusPending ProductDeleteStatus = "Pending"
 	ProductDeleteStatusActive  ProductDeleteStatus = "Active"
 	ProductDeleteStatusDeleted ProductDeleteStatus = "Deleted"
 )

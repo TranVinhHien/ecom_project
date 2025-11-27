@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS ecommerce_transacion_db;
-USE ecommerce_transacion_db;
+CREATE DATABASE IF NOT EXISTS ecommerce_transaction_db;
+USE ecommerce_transaction_db;
 -- Thiết lập mã hóa UTF-8
 -- =================================================================
 -- DATABASE SCHEMA FOR ORDER SERVICE
@@ -132,7 +132,7 @@ VALUES
   ('c3d4e5f6-a7b8-9012-3456-7890abcdef2', 'Cổng thanh toán VNPAY', 'VNPAY', 'ONLINE', FALSE),
   ('d4e5f6a7-b8c9-0123-4567-890abcdef3', 'Chuyển khoản ngân hàng', 'BANK_TRANSFER', 'OFFLINE', FALSE);
 
-INSERT INTO `account_ledgers` 
-  (`id`, `owner_id`, `owner_type`, `balance`, `pending_balance`, `created_at`, `updated_at`)
-VALUES
-  ('111111111111111111111111111111111111', '111111111111111111111111111111111111', 'PLATFORM', 0, 0.00, NOW(), NOW());
+-- INSERT INTO `account_ledgers` 
+--   (`id`, `owner_id`, `owner_type`, `balance`, `pending_balance`, `created_at`, `updated_at`)
+-- VALUES
+--   ('111111111111111111111111111111111111', '111111111111111111111111111111111111', 'PLATFORM', 0, 0.00, NOW(), NOW());

@@ -168,6 +168,7 @@ func connectDBWithRetry(times int, dbConfig string) (*sql.DB, error) {
 	}
 	return nil, e
 }
+
 func goJobRedis(ctx context.Context, r services.ServicesRedis) {
 
 }

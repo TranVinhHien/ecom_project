@@ -1,3 +1,7 @@
 cấp quyền chạy file docker-run.sh
 chmod +x docker-run.sh
 ./docker-run.sh
+
+
+lệnh tạo redis
+lệnh tạo mysql

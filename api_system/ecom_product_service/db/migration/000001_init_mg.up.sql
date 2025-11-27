@@ -44,7 +44,7 @@ CREATE TABLE product (
     media TEXT, 
 
     -- Các trường quản lý
-    delete_status ENUM('Active', 'Deleted') DEFAULT 'Active',
+    delete_status ENUM('Pending','Active', 'Deleted') DEFAULT 'Active',
     product_is_permission_return BOOLEAN DEFAULT TRUE,
     product_is_permission_check BOOLEAN DEFAULT TRUE,
 

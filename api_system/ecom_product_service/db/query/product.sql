@@ -6,7 +6,7 @@ INSERT INTO product (
   brand_id, category_id, shop_id,
   image, media,
    product_is_permission_return, product_is_permission_check,
-  create_by
+  create_by,delete_status
 ) VALUES (
   sqlc.arg('id'),
   sqlc.arg('name'),
@@ -20,7 +20,7 @@ INSERT INTO product (
   sqlc.arg('media'), 
   COALESCE(sqlc.narg('product_is_permission_return'), TRUE),
   COALESCE(sqlc.narg('product_is_permission_check'), TRUE),
-  sqlc.arg('create_by')
+  sqlc.arg('create_by'),"Pending"
 );
 
 -- name: UpdateProduct :exec
@@ -115,7 +115,7 @@ SELECT
     (SELECT ps.id FROM product_sku ps WHERE ps.product_id = p.id ORDER BY ps.price DESC LIMIT 1) AS max_price_sku_id
 FROM product p
 WHERE 
-    p.delete_status = 'Active'
+    (sqlc.narg('delete_status') IS NULL OR p.delete_status = sqlc.narg('delete_status'))
     -- Bộ lọc động (Dynamic Filtering)
     AND (sqlc.narg('shop_id') IS NULL OR p.shop_id = sqlc.narg('shop_id'))
     AND (sqlc.narg('category_id') IS NULL OR p.category_id = sqlc.narg('category_id'))

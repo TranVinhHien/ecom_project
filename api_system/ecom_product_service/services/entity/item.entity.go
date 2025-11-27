@@ -31,6 +31,7 @@ type OrderBy struct {
 }
 type QueryFilter struct {
 	Conditions []Condition
+	Status     string
 	OrderBy    *OrderBy // Trường để sắp xếp
 	Page       int      // Trang hiện tại
 	PageSize   int      // Số lượng kết quả mỗi trang
@@ -196,7 +197,7 @@ type ProductUpdateParams struct {
 	ProductSKU                []ProductSKUParams    `json:"product_sku,omitempty"`
 	OptionValue               []ProductOptionParams `json:"option_value,omitempty"`
 	DeleteStatus              *bool                 `json:"delete_status" `
-
+	ApprovalProduct           *bool                 `json:"approval_product"`
 	// --- Cập nhật quản lý ảnh ---
 	RemoveMainImage *bool    `json:"remove_main_image,omitempty"` // Cờ để xóa ảnh chính
 	KeepMediaURLs   []string `json:"keep_media_urls,omitempty"`   // Giữ lại media URLs này

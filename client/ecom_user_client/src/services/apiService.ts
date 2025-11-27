@@ -19,6 +19,7 @@ import {
   OrderDetailResponse
 } from "@/types/order.types";
 import { VoucherApiResponse } from "@/types/voucher.types";
+import { BannerType, BannerApiResponse } from "@/types/shop.types";
 import API from "@/assets/configs/api";
 import { 
   ApiCartResponse, 
@@ -333,5 +334,28 @@ export const useClearCart = () => {
       queryClient.invalidateQueries({ queryKey: ['cart'] });
       queryClient.invalidateQueries({ queryKey: ['cart-count'] });
     },
+  });
+};
+
+// ================ BANNERS ================
+
+/**
+ * Hook để lấy danh sách banners theo loại
+ * GET /Banners/active
+ */
+export const useGetActiveBanners = (bannerType?: BannerType) => {
+  return useQuery<BannerApiResponse['result'], Error>({
+    queryKey: ['banners', bannerType],
+    queryFn: async () => {
+      const params: Record<string, any> = {};
+      if (bannerType) params.bannerType = bannerType;
+
+      const response = await apiClient.get<BannerApiResponse>('/Banners/active', {
+        params,
+        customBaseURL: 'http://localhost:8000/api'
+      });
+      return response.data.result;
+    },
+    staleTime: 1000 * 60 * 5, // Cache 5 phút
   });
 };

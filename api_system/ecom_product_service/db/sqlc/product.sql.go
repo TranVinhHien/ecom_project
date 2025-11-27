@@ -60,7 +60,7 @@ INSERT INTO product (
   brand_id, category_id, shop_id,
   image, media,
    product_is_permission_return, product_is_permission_check,
-  create_by
+  create_by,delete_status
 ) VALUES (
   ?,
   ?,
@@ -74,7 +74,7 @@ INSERT INTO product (
   ?, 
   COALESCE(?, TRUE),
   COALESCE(?, TRUE),
-  ?
+  ?,"Pending"
 )
 `
 
@@ -405,7 +405,7 @@ SELECT
     (SELECT ps.id FROM product_sku ps WHERE ps.product_id = p.id ORDER BY ps.price DESC LIMIT 1) AS max_price_sku_id
 FROM product p
 WHERE 
-    p.delete_status = 'Active'
+    (? IS NULL OR p.delete_status = ?)
     -- Bộ lọc động (Dynamic Filtering)
     AND (? IS NULL OR p.shop_id = ?)
     AND (? IS NULL OR p.category_id = ?)
@@ -426,15 +426,16 @@ LIMIT ? OFFSET ?
 `
 
 type ListProductsAdvancedParams struct {
-	ShopID     sql.NullString  `json:"shop_id"`
-	CategoryID sql.NullString  `json:"category_id"`
-	BrandID    sql.NullString  `json:"brand_id"`
-	PriceMin   sql.NullFloat64 `json:"price_min"`
-	PriceMax   sql.NullFloat64 `json:"price_max"`
-	Keyword    interface{}     `json:"keyword"`
-	Sort       interface{}     `json:"sort"`
-	Limit      int32           `json:"limit"`
-	Offset     int32           `json:"offset"`
+	DeleteStatus NullProductDeleteStatus `json:"delete_status"`
+	ShopID       sql.NullString          `json:"shop_id"`
+	CategoryID   sql.NullString          `json:"category_id"`
+	BrandID      sql.NullString          `json:"brand_id"`
+	PriceMin     sql.NullFloat64         `json:"price_min"`
+	PriceMax     sql.NullFloat64         `json:"price_max"`
+	Keyword      interface{}             `json:"keyword"`
+	Sort         interface{}             `json:"sort"`
+	Limit        int32                   `json:"limit"`
+	Offset       int32                   `json:"offset"`
 }
 
 type ListProductsAdvancedRow struct {
@@ -464,6 +465,8 @@ type ListProductsAdvancedRow struct {
 
 func (q *Queries) ListProductsAdvanced(ctx context.Context, arg ListProductsAdvancedParams) ([]ListProductsAdvancedRow, error) {
 	rows, err := q.db.QueryContext(ctx, listProductsAdvanced,
+		arg.DeleteStatus,
+		arg.DeleteStatus,
 		arg.ShopID,
 		arg.ShopID,
 		arg.CategoryID,

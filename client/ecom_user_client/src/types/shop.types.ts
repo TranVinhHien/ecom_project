@@ -32,3 +32,25 @@ export interface ShopApiResponse {
   succeeded: boolean;
   code: number;
 }
+
+export type BannerType = 'HOME' | 'CATEGORY' | 'PRODUCT' | 'PROMOTION';
+
+export interface Banner {
+  id: string;
+  shopId: string;
+  bannerName: string;
+  bannerImage: string;
+  bannerUrl: string;
+  bannerOrder: number;
+  isActive: boolean;
+  bannerType: BannerType;
+  targetId: string;
+  createdDate: string;
+}
+
+export interface BannerApiResponse {
+  result: Banner[];
+  messages: string[];
+  succeeded: boolean;
+  code: number;
+}

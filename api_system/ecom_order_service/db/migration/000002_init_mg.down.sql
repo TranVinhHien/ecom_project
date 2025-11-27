@@ -1,3 +1,0 @@
--- DROP TRIGGER IF EXISTS before_insert_category;
--- DROP TRIGGER IF EXISTS before_update_category;
--- DROP FUNCTION IF EXISTS get_category_path;

@@ -15,15 +15,17 @@ type Product struct {
 }
 
 type ProductUpdate struct {
-	Name                      *string       `form:"name" json:"name" binding:"omitempty,min=1,max=255"`
-	Key                       *string       `form:"key" json:"key" binding:"omitempty,min=1"`
-	Description               *string       `form:"description" json:"description"`
-	ShortDescription          *string       `form:"short_description" json:"short_description"`
-	ProductIsPermissionReturn *bool         `form:"product_is_permission_return" json:"product_is_permission_return"`
-	ProductIsPermissionCheck  *bool         `form:"product_is_permission_check" json:"product_is_permission_check"`
-	DeleteStatus              *bool         `form:"delete_status" json:"delete_status" `
-	ProductSKU                []ProductSku  `form:"product_sku" json:"product_sku" binding:"omitempty,dive"`
-	OptionValue               []OptionValue `form:"option_value" json:"option_value" binding:"omitempty,dive"`
+	Name                      *string `form:"name" json:"name" binding:"omitempty,min=1,max=255"`
+	Key                       *string `form:"key" json:"key" binding:"omitempty,min=1"`
+	Description               *string `form:"description" json:"description"`
+	ShortDescription          *string `form:"short_description" json:"short_description"`
+	ProductIsPermissionReturn *bool   `form:"product_is_permission_return" json:"product_is_permission_return"`
+	ProductIsPermissionCheck  *bool   `form:"product_is_permission_check" json:"product_is_permission_check"`
+	DeleteStatus              *bool   `form:"delete_status" json:"delete_status" `
+	ApprovalProduct           *bool   `form:"approval_product" json:"approval_product"`
+
+	ProductSKU  []ProductSku  `form:"product_sku" json:"product_sku" binding:"omitempty,dive"`
+	OptionValue []OptionValue `form:"option_value" json:"option_value" binding:"omitempty,dive"`
 }
 
 type ProductSku struct {

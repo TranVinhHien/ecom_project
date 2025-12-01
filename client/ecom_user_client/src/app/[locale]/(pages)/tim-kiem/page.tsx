@@ -3,27 +3,22 @@
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "@/i18n/routing"
 
-import { useState, useEffect } from "react";
-import { useGetProducts } from "@/services/apiService";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { useState, useEffect, useMemo } from "react";
+import { useGetActiveBanners, useGetProducts } from "@/services/apiService";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShoppingCart, Heart, SlidersHorizontal } from "lucide-react";
-import { Link } from '@/i18n/routing';
-import Image from "next/image";
-import { useCart } from "@/hooks/useCart";
-import { useToast } from "@/hooks/use-toast";
-import ROUTER from "@/assets/configs/routers";
-import {getImageUrl, formatPrice} from "@/assets/helpers/convert_tool";
+import { SlidersHorizontal } from "lucide-react";
+import {getImageUrl} from "@/assets/helpers/convert_tool";
 import C_ProductSimple from "@/resources/components_thuongdung/product";
+import { UserProfile } from "@/types/user.types";
+import { INFO_USER } from "@/assets/configs/request";
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { toast } = useToast();
-  const { addToCart, isAddingToCart } = useCart();
 
   // Lấy params từ URL
   const cate_path = searchParams.get("cate_path") || undefined;
@@ -39,12 +34,27 @@ export default function SearchPage() {
   const [priceMax, setPriceMax] = useState<number | undefined>(undefined);
   const [brand, setBrand] = useState<string | undefined>(brandParam);
   const [showFilters, setShowFilters] = useState(false);
+  // const [profile, setProfile] = useState<UserProfile   | null>(null);
+ 
 
   // Reset page về 1 khi thay đổi filters
   useEffect(() => {
     setPage(1);
   }, [sortBy, priceMin, priceMax, brand, keywords, cate_path]);
 
+  const [profile, setProfile] = useState<UserProfile   | null>(null);
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
   // Gọi API
   const { data, isLoading, error } = useGetProducts({
     page,
@@ -57,6 +67,32 @@ export default function SearchPage() {
     price_max: priceMax,
     sort: sortBy === "default" ? undefined : (sortBy as any),
   });
+  const { data: categoryBanners } = useGetActiveBanners("CATEGORY");
+  const normalizedCatePath = cate_path ? decodeURIComponent(cate_path) : undefined;
+  const matchedCategoryBanner = useMemo(() => {
+    console.log('categoryBanners', categoryBanners);
+    if (!categoryBanners || !normalizedCatePath) return null;
+
+    const matched = categoryBanners
+      .map((banner) => ({
+        banner,
+        meta: getBannerTargetMeta(banner.bannerUrl),
+      }))
+      .filter(({ meta }) => meta && meta.catePath === normalizedCatePath)
+      .sort((a, b) => (a.banner.bannerOrder || 0) - (b.banner.bannerOrder || 0));
+    console.log(matched);
+    return matched[0] || null;
+  }, [categoryBanners, normalizedCatePath]);
+
+  const handleBannerNavigation = (meta: BannerTargetMeta) => {
+    const href = resolveBannerHref(meta);
+    if (!href) return;
+    if (ABSOLUTE_URL_PATTERN.test(href)) {
+      window.open(href, "_blank", "noopener noreferrer");
+    } else {
+      router.push(href);
+    }
+  };
 
 
   // Render skeleton khi loading
@@ -88,10 +124,32 @@ export default function SearchPage() {
       </div>
     );
   }
-
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
+      
+      {matchedCategoryBanner?.banner && matchedCategoryBanner.meta && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => handleBannerNavigation(matchedCategoryBanner.meta!)}
+            className="block w-full"
+          >
+            <div className="relative w-full h-40 md:h-56 lg:h-64 overflow-hidden rounded-xl shadow">
+
+  <img
+    src={getImageUrl(matchedCategoryBanner.banner.bannerImage)}
+    alt={matchedCategoryBanner.banner.bannerName}
+    
+    // SỬA: Thêm "block" và "mx-auto". Bỏ "center"
+    className="object-cover w-[70vw] block mx-auto h-[250px] md:h-[400px] lg:h-[500px] xl:h-[650px]"
+    
+    sizes="70vw"
+/>
+            </div>
+          </button>
+        </div>
+      )}
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-2">
           {keywords ? `Kết quả tìm kiếm cho "${keywords}"` : "Danh sách sản phẩm"}
@@ -110,10 +168,12 @@ export default function SearchPage() {
               <SelectValue placeholder="Sắp xếp theo" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="default">Mặc định</SelectItem>
+              <SelectItem value="default">Mới nhất</SelectItem>
               <SelectItem value="price_asc">Giá tăng dần</SelectItem>
               <SelectItem value="price_desc">Giá giảm dần</SelectItem>
-              <SelectItem value="newest">Mới nhất</SelectItem>
+              <SelectItem value="name_asc">Tên A-Z</SelectItem>
+              <SelectItem value="name_desc">Tên Z-A</SelectItem>
+              <SelectItem value="best_sell">Bán chạy nhất</SelectItem>
             </SelectContent>
           </Select>
 
@@ -201,7 +261,7 @@ export default function SearchPage() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
             {data.data.map((product) => (
-              <C_ProductSimple key={product.id} product={product} />
+              <C_ProductSimple key={product.id} product={product} collection_type="search" user_id={profile?.userId} />
             ))}
           </div>
 
@@ -276,3 +336,55 @@ export default function SearchPage() {
     </div>
   );
 }
+
+const TIM_KIEM_PREFIX = "timkiem-";
+const ABSOLUTE_URL_PATTERN = /^https?:\/\//i;
+const FALLBACK_ORIGIN = "http://localhost:3000";
+
+interface BannerTargetMeta {
+  normalizedUrl: string;
+  catePath?: string;
+}
+
+const getBannerTargetMeta = (rawUrl?: string | null): BannerTargetMeta | null => {
+  if (!rawUrl) return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  const lower = trimmed.toLowerCase();
+  const hasPrefix = lower.startsWith(TIM_KIEM_PREFIX);
+  const normalizedUrl = hasPrefix ? trimmed.slice(TIM_KIEM_PREFIX.length) : trimmed;
+  const normalizedLower = normalizedUrl.toLowerCase();
+
+  if (!hasPrefix && !normalizedLower.startsWith("/tim-kiem") && !normalizedLower.startsWith("tim-kiem")) {
+    return null;
+  }
+
+  try {
+    const urlObj = buildUrlFromMaybeRelative(normalizedUrl);
+    const catePath = urlObj.searchParams.get("cate_path");
+
+    return {
+      normalizedUrl,
+      catePath: catePath ? decodeURIComponent(catePath) : undefined,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const buildUrlFromMaybeRelative = (value: string) => {
+  if (ABSOLUTE_URL_PATTERN.test(value)) {
+    return new URL(value);
+  }
+  const absolutePath = value.startsWith("/") ? value : `/${value}`;
+  return new URL(absolutePath, FALLBACK_ORIGIN);
+};
+
+const resolveBannerHref = (meta?: BannerTargetMeta | null) => {
+  if (!meta || !meta.normalizedUrl) return undefined;
+  if (ABSOLUTE_URL_PATTERN.test(meta.normalizedUrl)) {
+    return meta.normalizedUrl;
+  }
+  return meta.normalizedUrl.startsWith("/") ? meta.normalizedUrl : `/${meta.normalizedUrl}`;
+};

@@ -143,7 +143,7 @@ PENDING → AWAITING_PAYMENT → SUCCESS
 ## 📦 Dependencies
 
 ### Required Services
-- **MySQL 8.0+**: Database chính (ecommerce_transacion_db)
+- **MySQL 8.0+**: Database chính (ecommerce_transaction_db)
 - **Redis 7+**: Cache transaction data
 - **Kafka**: Message broker cho events
 - **MoMo**: Payment gateway
@@ -273,7 +273,7 @@ make docker-exec
 ### Environment Variables
 ```bash
 # Database
-DB_SOURCE=root:101204@tcp(localhost:3306)/ecommerce_transacion_db?parseTime=true
+DB_SOURCE=root:101204@tcp(localhost:3306)/ecommerce_transaction_db?parseTime=true
 
 # Server
 HTTP_SERVER_ADDRESS=0.0.0.0:9003
@@ -574,7 +574,7 @@ docker ps | grep mysql
 mysql -h 172.26.127.95 -u root -p101204 -e "SHOW DATABASES;"
 
 # Kiểm tra database tồn tại
-mysql -h 172.26.127.95 -u root -p101204 -e "USE ecommerce_transacion_db; SHOW TABLES;"
+mysql -h 172.26.127.95 -u root -p101204 -e "USE ecommerce_transaction_db; SHOW TABLES;"
 ```
 
 ## 🔍 Monitoring & Logs

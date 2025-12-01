@@ -27,12 +27,13 @@ docker run -d \
   --max-connections=200
 
 docker run -d \
-  --name redis_main \
+  --name redis \
   --restart unless-stopped \
+  --network app-network \
   -p 6379:6379 \
   --cpus="1.0" \
   --memory="512m" \
   -v redis_data:/data \
-  redis:8.2.3
+  redis:8.2.3 redis-server --appendonly yes
 
 k6 run --out web-dashboard --out csv=ket_qua_full.csv test.js

@@ -24,6 +24,8 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Loading } from "@/components/ui/loading";
+import { INFO_USER } from "@/assets/configs/request";
+import { UserProfile } from "@/types/user.types";
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
@@ -40,6 +42,7 @@ export default function SearchPage() {
   const [priceMax, setPriceMax] = useState<number | undefined>();
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // Reset page when filters change
   useEffect(() => {
@@ -87,6 +90,19 @@ export default function SearchPage() {
     setShowFilters(false);
   };
 
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
   const handleClearFilters = () => {
     setPriceMin(undefined);
     setPriceMax(undefined);
@@ -94,7 +110,7 @@ export default function SearchPage() {
     setSearchKeyword('');
     setCurrentPage(1);
   };
-
+  
   return (
     <div className="min-h-screen p-8 pb-20 font-[family-name:var(--font-geist-sans)]">
       <div className="max-w-7xl mx-auto">
@@ -269,7 +285,7 @@ export default function SearchPage() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mb-6">
               {productsData.data.map((product) => (
-                <C_ProductSimple key={product.id} product={product} />
+                <C_ProductSimple key={product.id} product={product} user_id={profile?.id || ""} collection_type="search" />
               ))}
             </div>
 

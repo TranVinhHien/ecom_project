@@ -27,6 +27,8 @@ import {
   AddToCartPayload, 
   UpdateCartItemPayload 
 } from "@/types/cart.types";
+import { CollectionType } from "@/types/collection.types";
+import { custom } from "zod";
 
 // ================ CATEGORIES ================
 
@@ -359,3 +361,42 @@ export const useGetActiveBanners = (bannerType?: BannerType) => {
     staleTime: 1000 * 60 * 5, // Cache 5 phút
   });
 };
+
+// ================ COLLECTION ================
+
+/**
+ * Hook để thu thập dữ liệu
+ * GET /Banners/active
+ */
+export const useCollectData = () => {
+  return useMutation<ApiCartResponse['result'], Error, CollectionType>({
+    mutationFn: async (payload: CollectionType) => {
+      const response = await apiClient.post<ApiCartResponse>(API.AI_CHUONG.collection, payload,
+        {
+          customBaseURL: 'http://localhost:5000/api'
+        }
+      );
+      return response.data.result;
+    },
+    // onSuccess: () => {
+
+    // },
+  });
+
+};
+
+// export const useAddToCart = () => {
+//   const queryClient = useQueryClient();
+  
+//   return useMutation<ApiCartResponse['result'], Error, AddToCartPayload>({
+//     mutationFn: async (payload: AddToCartPayload) => {
+//       const response = await apiCartClient.post<ApiCartResponse>(API.cart.addItem, payload);
+//       return response.data.result;
+//     },
+//     onSuccess: () => {
+//       // Invalidate cart queries để refetch
+//       queryClient.invalidateQueries({ queryKey: ['cart'] });
+//       queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+//     },
+//   });
+// };

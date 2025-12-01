@@ -18,15 +18,20 @@ SELECT
     COUNT(*) AS total_ratings,
     COUNT(CASE WHEN rating = 1 THEN 1 END) AS like_count,
     COUNT(CASE WHEN rating = -1 THEN 1 END) AS dislike_count,
-    ROUND(
-        (COUNT(CASE WHEN rating = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0),
-        2
+    -- Ép kiểu kết quả cuối cùng sang DOUBLE để sqlc hiểu là float64
+    CAST(
+        COALESCE(
+            ROUND(
+                (COUNT(CASE WHEN rating = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0),
+                2
+            ), 
+            0.0
+        ) AS DOUBLE
     ) AS satisfaction_rate
 FROM message_ratings
 WHERE
-    sqlc.narg(start_date) IS NULL 
-    OR sqlc.narg(end_date) IS NULL 
-    OR created_at BETWEEN sqlc.narg(start_date) AND sqlc.narg(end_date);
+    (sqlc.narg('start_date') IS NULL OR created_at >= sqlc.narg('start_date'))
+    AND (sqlc.narg('end_date') IS NULL OR created_at <= sqlc.narg('end_date'));
 
 -- name: GetMessageRatingsTimeSeries :many
 -- Thống kê theo thời gian (theo ngày)
@@ -35,18 +40,22 @@ SELECT
     COUNT(*) AS total_ratings,
     COUNT(CASE WHEN rating = 1 THEN 1 END) AS like_count,
     COUNT(CASE WHEN rating = -1 THEN 1 END) AS dislike_count,
-    ROUND(
-        (COUNT(CASE WHEN rating = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0),
-        2
+    -- Tương tự ở đây
+    CAST(
+        COALESCE(
+            ROUND(
+                (COUNT(CASE WHEN rating = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0),
+                2
+            ), 
+            0.0
+        ) AS DOUBLE
     ) AS satisfaction_rate
 FROM message_ratings
 WHERE
-    sqlc.narg(start_date) IS NULL 
-    OR sqlc.narg(end_date) IS NULL 
-    OR created_at BETWEEN sqlc.narg(start_date) AND sqlc.narg(end_date)
+    (sqlc.narg('start_date') IS NULL OR created_at >= sqlc.narg('start_date'))
+    AND (sqlc.narg('end_date') IS NULL OR created_at <= sqlc.narg('end_date'))
 GROUP BY report_date
 ORDER BY report_date ASC;
-
 -- name: GetMessageRatingsBySession :many
 -- Lấy danh sách ratings theo session để xem chi tiết
 SELECT 

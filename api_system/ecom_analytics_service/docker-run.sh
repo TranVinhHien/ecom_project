@@ -69,7 +69,7 @@ sudo docker ps --filter "name=${CONTAINER_NAME}" --format "table {{.Names}}\t{{.
 echo -e "\n${BLUE}=== Service Dependencies ===${NC}"
 echo -e "${GREEN}MySQL Databases:${NC}"
 echo -e "  - Order DB: 172.26.127.95:3306/ecommerce_order_db"
-echo -e "  - Transaction DB: 172.26.127.95:3306/ecommerce_transacion_db"
+echo -e "  - Transaction DB: 172.26.127.95:3306/ecommerce_transaction_db"
 echo -e "  - Interact DB: 172.26.127.95:3306/ecommerce_interact_db"
 echo -e "${GREEN}Redis:${NC} 172.26.127.95:6379"
 echo -e "${GREEN}Allowed Origins:${NC} http://localhost:9999, http://localhost:8989"

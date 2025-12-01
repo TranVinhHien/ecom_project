@@ -11,6 +11,8 @@ import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import React, { useRef, useState, useEffect } from "react";
 import apiClient from "@/lib/apiClient";
+import { UserProfile } from "@/types/user.types";
+import { INFO_USER } from "@/assets/configs/request";
 
 function base64ToFile(base64: string, filename: string): File {
   const arr = base64.split(',');
@@ -50,33 +52,71 @@ export default function SearchPage() {
         setError(null);
         
         const formData = new FormData();
-        formData.append('image', base64ToFile(searchImage, 'search_image.png'));
+        formData.append('file', base64ToFile(searchImage, 'search_image.png'));
         
-        const response = await apiClient.post('/predict', formData, {
+        const response = await apiClient.post('/search/image', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          customBaseURL: API.AI_CHUONG_BASE,
         });
 
-        const data = response.data;
-        console.log(data)
+        // const data = response.data;
 
-        const productsList = data.products ?? [];
-        setPrediction({
-          label: data.label,
-          confidence: data.confidence
+        const data_search_image:{
+          results:{
+            matched_image: string,
+            price: number,
+            product_id: string,
+            similarity: number
+          }[]
+        } = response.data
+        console.log(data_search_image)
+      
+        const productIds = data_search_image.results
+            .filter(item => item.similarity > 0.01)
+            .map(item => item.product_id);
+
+        // 1. Tạo query string thủ công: "product_ids=id1&product_ids=id2"
+        const queryString = productIds
+            .map(id => `product_ids=${id}`)
+            .join('&');
+
+        // 2. Gọi API (Nối trực tiếp vào URL)
+        const response_product = await apiClient.get(`/product/get_products_detail_for_search?${queryString}`, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            customBaseURL: API.base_product,
         });
+
+
+        console.log("response_product:", response_product);
+        // const productIds = data_search_image.results.filter(item => item.similarity>0.75).map(item => item.product_id);
+         
+        // const response_product = await apiClient.get('/product/get_products_detail_for_search'+, {
+        //   headers: {
+        //     'Content-Type': 'multipart/form-data',
+        //   },
+        //   customBaseURL: API.base_product,
+        // });
+
+        // const productsList = data.products ?? [];
+        // setPrediction({
+        //   label: "label_example", // Replace with actual label from response
+        //   confidence: 0.95 // Replace with actual confidence from response
+        // });
         
-        // Transform products data
-        const updatedProducts = productsList.map((product: any) => {
-          const { product_spu_id, ...rest } = product;
-          return {
-            ...rest,
-            products_spu_id: product_spu_id,
-          };
-        });
+        // // Transform products data
+        // const updatedProducts = productsList.map((product: any) => {
+        //   const { product_spu_id, ...rest } = product;
+        //   return {
+        //     ...rest,
+        //     products_spu_id: product_spu_id,
+        //   };
+        // });
 
-        setProducts(updatedProducts);
+        // setProducts(updatedProducts);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Lỗi khi tìm kiếm sản phẩm');
         console.error('Error fetching products:', err);
@@ -89,6 +129,21 @@ export default function SearchPage() {
   }, [searchImage]);
 
   const t = useTranslations("System");
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
 
   return (
     <div className="min-h-screen p-8 pb-20 font-[family-name:var(--font-geist-sans)]">
@@ -130,7 +185,7 @@ export default function SearchPage() {
         {/* Search Results */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {products.map((product, index) => (
-            <C_ProductSimple key={index} product={product}/>
+            <C_ProductSimple key={index} product={product} user_id={profile?.id} collection_type="search" />
           ))}
         </div>
 

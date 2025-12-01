@@ -15,7 +15,7 @@ const ROUTER = {
     home: "/",
     khieunai: "/khieu-nai",
     timkiem:{
-        query: "/timkiem",
+        query: "/tim-kiem",
         image: "/timkiemanh",
     }
 

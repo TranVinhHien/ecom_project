@@ -8,17 +8,34 @@ import { toast } from "@/hooks/use-toast";
 import ROUTER from "@/assets/configs/routers";
 import { Button } from "@/components/ui/button";
 import {getImageUrl, formatPrice} from "@/assets/helpers/convert_tool";
+import { useCollectData } from "@/services/apiService";
+import { event_type } from "@/types/collection.types";
+import { INFO_USER } from "@/assets/configs/request";
 
-const C_ProductSimple = ({ product }: { product: ProductSummary }) => {
-  const t = useTranslations("System");
-  console.log("C_ProductSimple product:", product);
+const C_ProductSimple = ({ product ,collection_type,user_id }: { product: ProductSummary, collection_type: event_type, user_id?: string }) => {
+
+  const collectMutation = useCollectData();
+
+  const onProductClick =async () => {
+    if (!user_id){
+      user_id = "guest";
+    }
+    await collectMutation.mutateAsync({
+          product_id: product.id,
+          event_type:collection_type ,
+          user_id: user_id, 
+          shop_id: product.shop_id,
+          price: product.min_price,
+          quantity: 1,
+        });
+  }
   return (
     
               <Card
                 key={product.id}
                 className="overflow-hidden hover:shadow-lg transition-shadow duration-300 group flex flex-col h-full"
               >
-                <Link href={`/product/${product.key}`}>
+                <Link onClick={onProductClick} href={`/product/${product.key}`}>
                   <div className="relative aspect-square overflow-hidden bg-gray-100">
                     <Image
                       src={getImageUrl(product.image)}
@@ -44,7 +61,7 @@ const C_ProductSimple = ({ product }: { product: ProductSummary }) => {
                 </Link>
 
                 <CardContent className="p-4 flex-1 flex flex-col">
-                  <Link href={`${ROUTER.product}/${product.key}`}>
+                  <Link onClick={onProductClick} href={`${ROUTER.product}/${product.key}`}>
                     <h3 className="font-medium text-sm mb-2 line-clamp-2 hover:text-[hsl(var(--primary))] min-h-[40px]">
                       {product.name}
                     </h3>
@@ -83,7 +100,7 @@ const C_ProductSimple = ({ product }: { product: ProductSummary }) => {
 
                 <CardFooter className="p-4 pt-0">
                   <Link href={`${ROUTER.product}/${product.key}`} className="w-full">
-                    <Button className="w-full bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/.9)]">
+                    <Button onClick={onProductClick} className="w-full bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/.9)]">
                       {/* <ShoppingCart className="w-4 h-4 mr-2" /> */}
                       Xem chi tiết
                     </Button>

@@ -2,9 +2,16 @@
 
 import C_ProductSimple from "@/resources/components_thuongdung/product";
 import { useTranslations } from "next-intl";
-import React from "react";
-import { useGetProducts } from "@/services/apiService";
+import React, { useEffect, useMemo, useState } from "react";
+import { useGetActiveBanners, useGetProducts } from "@/services/apiService";
 import { ProductSummary } from "@/types/product.types";
+import { Banner } from "@/types/shop.types";
+import { getImageUrl } from "@/assets/helpers/convert_tool";
+import { useRouter } from "@/i18n/routing";
+import { Image } from "lucide-react";
+import { UserProfile } from "@/types/user.types";
+import { INFO_USER } from "@/assets/configs/request";
+import { event_type } from "@/types/collection.types";
 
 export default function Home() {
   const t = useTranslations("System");
@@ -24,6 +31,22 @@ export default function Home() {
     sort:'best_sell',
     cate_path:'/cham-soc-nha-cua'
   });
+  const { data: homeBanners } = useGetActiveBanners('HOME');
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
   if (isLoading) return (
     <div className="flex justify-center items-center min-h-screen">
       <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-[#ee4d2d]"></div>
@@ -38,14 +61,108 @@ export default function Home() {
 
   const products = data?.data || [];
 
+
   return (
     <div className="pt-36">
+      <HomeBannerSlider banners={homeBanners || []} />
       <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
         <div className="mb-64" />
         <TopSearchSection items={products} t={t} />
         <div className="mb-8" />
-          <HomeSuggestion products={products} title="Bán chạy nhất điện tử" t={t} />
-        <HomeSuggestion products={data_cham_soc_nha_cua?.data || []} title="Chăm sóc nhà cửa" t={t} />
+          <HomeSuggestion products={products} user_id={profile?.id || ""} title="Bán chạy nhất điện tử" t={t} collection_type="click" />
+        <HomeSuggestion products={data_cham_soc_nha_cua?.data || []} user_id={profile?.id || ""} title="Chăm sóc nhà cửa" t={t} collection_type="click" />
+      </div>
+    </div>
+  );
+}
+
+function HomeBannerSlider({ banners }: { banners: Banner[] }) {
+  const router = useRouter();
+  const sortedBanners = useMemo(() => {
+    return [...banners].sort((a, b) => (a.bannerOrder || 0) - (b.bannerOrder || 0));
+  }, [banners]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (sortedBanners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % sortedBanners.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [sortedBanners.length]);
+
+  if (sortedBanners.length === 0) {
+    return null;
+  }
+
+  const handleNavigate = (rawUrl?: string) => {
+    if (!rawUrl) return;
+    const url = rawUrl.trim();
+    if (url.startsWith("http")) {
+      window.open(url, "_blank", "noopener noreferrer");
+      return;
+    }
+    router.push(url);
+  };
+
+  return (
+    <div className="w-full px-4 md:px-8 lg:px-16 mb-10">
+      <div className="relative w-full h-48 md:h-64 lg:h-80 rounded-2xl overflow-hidden shadow-lg">
+        {sortedBanners.map((banner, index) => (
+          <button
+            key={banner.id}
+            type="button"
+            onClick={() => handleNavigate(banner.bannerUrl)}
+            className={`absolute inset-0 transition-opacity duration-700 ${currentIndex === index ? "opacity-100 z-10" : "opacity-0"}`}
+            aria-label={banner.bannerName}
+          >
+             {/* <img
+      src={getImageUrl(banner.bannerImage)}
+      alt={banner.bannerName}      
+      className="object-cover w-full h-[180px] md:h-[300px] lg:h-[400px] xl:h-[500px]"
+      sizes="100vw"
+      /> */}
+
+  <img
+    src={getImageUrl(banner.bannerImage)}
+    alt={banner.bannerName}
+    
+    // SỬA: Thêm "block" và "mx-auto". Bỏ "center"
+    className="object-cover w-[70vw] block mx-auto h-[250px] md:h-[400px] lg:h-[500px] xl:h-[650px]"
+    
+    sizes="70vw"
+/>
+          </button>
+        ))}
+
+        {sortedBanners.length > 1 && (
+          <>
+            <button
+              type="button"
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 text-white rounded-full p-2 z-20"
+              onClick={() => setCurrentIndex((prev) => (prev - 1 + sortedBanners.length) % sortedBanners.length)}
+              aria-label="Previous banner"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 text-white rounded-full p-2 z-20"
+              onClick={() => setCurrentIndex((prev) => (prev + 1) % sortedBanners.length)}
+              aria-label="Next banner"
+            >
+              ›
+            </button>
+            <div className="absolute bottom-4 inset-x-0 flex justify-center gap-2 z-20">
+              {sortedBanners.map((_, index) => (
+                <span
+                  key={`dot-${index}`}
+                  className={`h-2 w-2 rounded-full ${currentIndex === index ? "bg-white" : "bg-white/50"}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -96,7 +213,8 @@ function TopSearchSection({ items, t }: { items: ProductSummary[], t: any }) {
   );
 }
 
-function HomeSuggestion({ products, title, t }: { products: ProductSummary[], title: string, t: any }) {
+function HomeSuggestion({ products, title, t,user_id,collection_type }: { products: ProductSummary[], title: string, t: any, user_id: string, collection_type: event_type }) {
+ 
   return (
     <div className="w-full px-4 md:px-0">
       <section className="bg-[#f5f5f5] py-4 px-4 md:px-6 rounded-lg mb-8 w-full">
@@ -105,7 +223,7 @@ function HomeSuggestion({ products, title, t }: { products: ProductSummary[], ti
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
           {products.length > 0 && products?.map(product => (
-            <C_ProductSimple key={product.id} product={product} />
+            <C_ProductSimple key={product.id} product={product} collection_type={collection_type} user_id={user_id} />
           ))}
         </div>
        
@@ -113,39 +231,3 @@ function HomeSuggestion({ products, title, t }: { products: ProductSummary[], ti
     </div>
   );
 }
-
-// // Helper function để tạo media URL từ API Gateway
-// const getMediaUrl = (imageId: string) => {
-//   const baseURL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:9001';
-//   return `${baseURL}/media/products?id=${imageId}`;
-// };
-
-
-  //  function CategorySection({t}:{t:any}) {
-  //   return (
-  //        <div className="w-full">
-  //   <section className="bg-[#f5f5f5] py-6 px-6 rounded-lg mb-6">
-  //   <div className="text-2xl font-semibold mb-4 text-gray-700">{t("danh_muc")}</div>
-  //   <div className="grid grid-cols-10 gap-y-8 gap-x-0 bg-white rounded-lg overflow-hidden border">
-  //     {categories.map((cat, idx) => (
-  //       <div
-  //         key={cat.name}
-  //         className="flex flex-col items-center justify-center py-6 border-r border-b last:border-r-0"
-  //         style={{
-  //           borderRight: (idx + 1) % 10 === 0 ? "none" : undefined,
-  //           borderBottom: idx >= 10 ? "none" : undefined,
-  //         }}
-  //       >
-  //         <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-2">
-  //           <img src={cat.image} alt={cat.name} className="w-12 h-12 object-contain" style={{ borderRadius: '50%' }}/>
-  //         </div>
-  //         <div className="text-center text-sm text-gray-700 font-medium w-24 truncate">
-  //           {cat.name}
-  //         </div>
-  //       </div>
-  //     ))}
-  //   </div>
-  // </section>
-  //     </div>
-//     );
-  // }

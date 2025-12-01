@@ -63,7 +63,7 @@ echo -e "${GREEN}Status:${NC}"
 sudo docker ps --filter "name=${CONTAINER_NAME}" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 echo -e "\n${BLUE}=== Service Dependencies ===${NC}"
-echo -e "${GREEN}MySQL:${NC} 172.26.127.95:3306 (ecommerce_transacion_db)"
+echo -e "${GREEN}MySQL:${NC} 172.26.127.95:3306 (ecommerce_transaction_db)"
 echo -e "${GREEN}Redis:${NC} 172.26.127.95:6379"
 echo -e "${GREEN}Kafka:${NC} 172.26.127.95:9092"
 echo -e "${GREEN}Product Service:${NC} 172.26.127.95:9001"

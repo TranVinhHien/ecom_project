@@ -19,6 +19,12 @@ import { useChatStore } from '@/store/chatStore';
 import { getImageUrl } from '@/assets/helpers/convert_tool';
 import ImageGalleryModal from '@/components/ImageGalleryModal';
 import ShopInfo from '@/components/ShopInfo';
+import { UserProfile } from '@/types/user.types';
+import { INFO_USER } from '@/assets/configs/request';
+import { useCollectData } from '@/services/apiService';
+import { event_type } from '@/types/collection.types';
+import C_ProductSimple from '@/resources/components_thuongdung/product';
+import { ProductSummary } from '@/types/product.types';
 
 // Image Slider Component
 const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage, onImageClick, shopId }: {
@@ -43,6 +49,8 @@ const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage
 
   // Display option image temporarily when selected
   const displayImage = optionImage || images[currentIndex];
+
+
 
   return (
     <div className="sticky top-8">
@@ -165,6 +173,158 @@ const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage
   );
 };
 
+// Similar Products Component
+const SimilarProducts = ({ productId, userId, productData }: { 
+  productId: string; 
+  userId: string;
+  productData: any;
+}) => {
+  const t = useTranslations("System");
+  const [similarProducts, setSimilarProducts] = useState<ProductSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchSimilarProducts = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Build query string from product data
+        const queryParts = [];
+        
+        // Add product name
+        if (productData.product?.name) {
+          queryParts.push(productData.product.name);
+        }
+        
+        // Add short description
+        if (productData.product?.short_description) {
+          queryParts.push(productData.product.short_description);
+        }
+        
+        // Add brand name
+        if (productData.brand?.name) {
+          queryParts.push(productData.brand.name);
+        }
+        
+        // Add category name
+        if (productData.category?.name) {
+          queryParts.push(productData.category.name);
+        }
+
+        const queryText = queryParts.join(' ');
+
+        if (!queryText) {
+          setSimilarProducts([]);
+          return;
+        }
+
+        // Call vector search API
+        const searchResponse = await fetch('http://localhost:9101/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query_text: queryText,
+            top_k: 15,
+            doc_type: 'product',
+          }),
+        });
+
+        if (!searchResponse.ok) {
+          throw new Error('Failed to fetch similar products');
+        }
+
+        const searchData = await searchResponse.json();
+
+        if (searchData.results && searchData.results.length > 0) {
+          // Filter out current product and transform results
+          const transformedProducts: ProductSummary[] = searchData.results
+            .filter((item: any) => item.product.id !== productId) // Exclude current product
+            .slice(0, 10) // Limit to 10 products
+            .map((item: any) => {
+              // Calculate min and max price from SKU array
+              const prices = item.sku?.map((s: any) => s.price) || [0];
+              const minPrice = Math.min(...prices);
+              const maxPrice = Math.max(...prices);
+
+              return {
+                id: item.product.id,
+                name: item.product.name,
+                key: item.product.key,
+                image: item.product.image,
+                shop_id: item.product.shop_id || '',
+                brand_id: item.brand || '',
+                category_id: item.category || '',
+                min_price: minPrice,
+                max_price: maxPrice,
+                min_price_sku_id: item.sku?.[0]?.id || '',
+                max_price_sku_id: item.sku?.[item.sku.length - 1]?.id || '',
+                description: item.product.short_description || '',
+                total_sold: 0,
+                short_description: item.product.short_description || '',
+                media: null,
+                product_is_permission_check: item.product.product_is_permission_check || false,
+                product_is_permission_return: item.product.product_is_permission_return || false,
+                delete_status: 'active',
+                rating: {
+                  average_rating: 0,
+                  total_reviews: 0
+                }
+              };
+            });
+          
+          setSimilarProducts(transformedProducts);
+        } else {
+          setSimilarProducts([]);
+        }
+      } catch (err) {
+        console.error('Error fetching similar products:', err);
+        setError('Không thể tải sản phẩm tương tự');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (productId && productData) {
+      fetchSimilarProducts();
+    }
+  }, [productId, productData]);
+
+  if (isLoading) {
+    return (
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold mb-6">Sản phẩm tương tự</h2>
+        <div className="flex justify-center py-12">
+          <Loading size="lg" variant="primary" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || similarProducts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-2xl font-bold mb-6">Sản phẩm tương tự</h2>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {similarProducts.map((product) => (
+          <C_ProductSimple 
+            key={product.id} 
+            product={product}
+            collection_type="click"
+            user_id={userId}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
   
   const t = useTranslations("System");
@@ -182,6 +342,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // Fetch product detail
   const { data, isLoading, error } = useQuery<ProductDetailApiResponse>({
@@ -194,6 +355,36 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       return response.data;
     },
   });
+
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
+    const collectMutation = useCollectData();
+  
+    const onProductClick =async (event_type: event_type,quantity?: number) => {
+      let user_id = profile?.id || "";
+      if (!user_id){
+        user_id = "guest";
+      }
+      await collectMutation.mutateAsync({
+            product_id: data?.result.data.product.id || "",
+            event_type:event_type ,
+            user_id: user_id, 
+            shop_id: data?.result.data.product.shop_id,
+            price: data?.result.data.product.min_price,
+            quantity: quantity || 1,
+          });
+    }
 
   const productData = data?.result?.data;
   const product = productData?.product;
@@ -309,7 +500,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       const optionValue = option?.values.find(v => v.option_value_id === value);
       return `${key}: ${optionValue?.value || ''}`;
     }).join(', ');
-
+    await onProductClick("cart_add", quantity);
     // Sử dụng useCart hook - tự động xử lý API hoặc localStorage
     const success = await addToCartAction({
       sku_id: selectedSku.id,
@@ -352,7 +543,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       alert(t("so_luong_vuot_qua_ton_kho"));
       return;
     }
-
+    onProductClick("purchase", quantity);
     const selectedOptionsText = Object.entries(selectedOptions).map(([key, value]) => {
       const option = options.find(opt => opt.option_name === key);
       const optionValue = option?.values.find(v => v.option_value_id === value);
@@ -611,6 +802,13 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       <div className="mt-8">
         <ProductComments productId={data.result.data.product.id} />
       </div>
+
+      {/* Similar Products Section */}
+      <SimilarProducts 
+        productId={data.result.data.product.id} 
+        userId={profile?.id || "guest"}
+        productData={productData}
+      />
 
       {/* Image Gallery Modal */}
       <ImageGalleryModal

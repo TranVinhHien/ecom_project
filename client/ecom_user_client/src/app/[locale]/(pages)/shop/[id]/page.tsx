@@ -24,6 +24,8 @@ import apiClient from '@/lib/apiClient';
 import C_ProductSimple from '@/resources/components_thuongdung/product';
 import { Loading } from '@/components/ui/loading';
 import { getImageUrl } from '@/assets/helpers/convert_tool';
+import { INFO_USER } from '@/assets/configs/request';
+import { UserProfile } from '@/types/user.types';
 
 export default function ShopPage({ params }: { params: { id: string } }) {
   const t = useTranslations("System");
@@ -284,6 +286,22 @@ export default function ShopPage({ params }: { params: { id: string } }) {
     setCurrentBannerIndex(index);
   };
 
+
+  const [profile, setProfile] = useState<UserProfile   | null>(null);
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
+
   return (
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto py-6 px-4">
@@ -540,7 +558,7 @@ export default function ShopPage({ params }: { params: { id: string } }) {
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                     {homeProducts.map((product) => (
-                      <C_ProductSimple key={product.id} product={product} />
+                      <C_ProductSimple key={product.id} product={product} collection_type="click" user_id={profile?.userId} />
                     ))}
                   </div>
                   
@@ -775,7 +793,7 @@ export default function ShopPage({ params }: { params: { id: string } }) {
 
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
                       {allProducts.data.map((product) => (
-                        <C_ProductSimple key={product.id} product={product} />
+                        <C_ProductSimple key={product.id} product={product} collection_type="click" user_id={profile?.userId} />
                       ))}
                     </div>
 

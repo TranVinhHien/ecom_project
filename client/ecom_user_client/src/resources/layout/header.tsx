@@ -89,22 +89,22 @@ export default function Header({ onClick }: { onClick: () => void }) {
     }, [])
 
     const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-        // const file = event.target.files?.[0];
-        // if (file) {
-        //     const reader = new FileReader();
-        //     reader.onload = (e) => {
-        //         // const base64Image = e.target?.result as string;
-        //         // Store the image in localStorage
-        //         // localStorage.setItem('searchImage', base64Image);
-        //         // if ( pathname=== ROUTER.timkiem.image) {
-        //         //     window.location.reload();
-        //         // } else {
-        //         //     router.push(ROUTER.timkiem.image);
-        //         // }
+        const file = event.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const base64Image = e.target?.result as string;
+                // Store the image in localStorage
+                localStorage.setItem('searchImage', base64Image);
+                if ( pathname=== ROUTER.timkiem.image) {
+                    window.location.reload();
+                } else {
+                    router.push(ROUTER.timkiem.image);
+                }
     
-        // };
-        //     reader.readAsDataURL(file);
-        // }
+        };
+            reader.readAsDataURL(file);
+        }
     };
 
     // Function to check if a category is selected
@@ -483,7 +483,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyPress={(e) => {
                                     if (e.key === 'Enter' && searchQuery.trim() !== "") {
-                                        router.push(ROUTER.timkiem.query + "?query=" + searchQuery);
+                                        router.push(ROUTER.timkiem.query + "?keywords=" + searchQuery);
                                     }
                                 }}
                             />
@@ -498,6 +498,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                 className="absolute right-12 md:right-14 top-1/2 transform -translate-y-1/2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/.9)] text-white rounded-full p-1.5 h-8 w-8 flex items-center justify-center"
                                 size="icon"
                                 onClick={() => fileInputRef.current?.click()}
+
                                 title={t('tim-kiem-bang-hinh-anh')}
                             >
                                 <Camera className="h-3 w-3 md:h-4 md:w-4" />
@@ -507,7 +508,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                 size="icon"
                                 onClick={() => {
                                     if (searchQuery.trim() !== "") {
-                                        router.push(ROUTER.timkiem.query + "?query=" + searchQuery);
+                                        router.push(ROUTER.timkiem.query + "?keywords=" + searchQuery);
                                     }
                                 }}
                             >

@@ -208,15 +208,20 @@ SELECT
     COUNT(*) AS total_ratings,
     COUNT(CASE WHEN rating = 1 THEN 1 END) AS like_count,
     COUNT(CASE WHEN rating = -1 THEN 1 END) AS dislike_count,
-    ROUND(
-        (COUNT(CASE WHEN rating = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0),
-        2
+    -- Ép kiểu kết quả cuối cùng sang DOUBLE để sqlc hiểu là float64
+    CAST(
+        COALESCE(
+            ROUND(
+                (COUNT(CASE WHEN rating = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0),
+                2
+            ), 
+            0.0
+        ) AS DOUBLE
     ) AS satisfaction_rate
 FROM message_ratings
 WHERE
-    ? IS NULL 
-    OR ? IS NULL 
-    OR created_at BETWEEN ? AND ?
+    (? IS NULL OR created_at >= ?)
+    AND (? IS NULL OR created_at <= ?)
 `
 
 type GetMessageRatingStatsParams struct {
@@ -235,8 +240,8 @@ type GetMessageRatingStatsRow struct {
 func (q *Queries) GetMessageRatingStats(ctx context.Context, arg GetMessageRatingStatsParams) (GetMessageRatingStatsRow, error) {
 	row := q.db.QueryRowContext(ctx, getMessageRatingStats,
 		arg.StartDate,
-		arg.EndDate,
 		arg.StartDate,
+		arg.EndDate,
 		arg.EndDate,
 	)
 	var i GetMessageRatingStatsRow
@@ -335,15 +340,20 @@ SELECT
     COUNT(*) AS total_ratings,
     COUNT(CASE WHEN rating = 1 THEN 1 END) AS like_count,
     COUNT(CASE WHEN rating = -1 THEN 1 END) AS dislike_count,
-    ROUND(
-        (COUNT(CASE WHEN rating = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0),
-        2
+    -- Tương tự ở đây
+    CAST(
+        COALESCE(
+            ROUND(
+                (COUNT(CASE WHEN rating = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0),
+                2
+            ), 
+            0.0
+        ) AS DOUBLE
     ) AS satisfaction_rate
 FROM message_ratings
 WHERE
-    ? IS NULL 
-    OR ? IS NULL 
-    OR created_at BETWEEN ? AND ?
+    (? IS NULL OR created_at >= ?)
+    AND (? IS NULL OR created_at <= ?)
 GROUP BY report_date
 ORDER BY report_date ASC
 `
@@ -365,8 +375,8 @@ type GetMessageRatingsTimeSeriesRow struct {
 func (q *Queries) GetMessageRatingsTimeSeries(ctx context.Context, arg GetMessageRatingsTimeSeriesParams) ([]GetMessageRatingsTimeSeriesRow, error) {
 	rows, err := q.db.QueryContext(ctx, getMessageRatingsTimeSeries,
 		arg.StartDate,
-		arg.EndDate,
 		arg.StartDate,
+		arg.EndDate,
 		arg.EndDate,
 	)
 	if err != nil {

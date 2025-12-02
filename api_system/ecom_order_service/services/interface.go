@@ -15,6 +15,7 @@ type ServiceUseCase interface {
 	// iservices.Products
 	iservices.Orders
 	iservices.Vouchers
+	iservices.Comments
 }
 
 type ServicesRedis interface {

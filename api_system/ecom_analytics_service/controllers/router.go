@@ -30,7 +30,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 	// Tất cả API trong nhóm này yêu cầu đăng nhập và có vai trò "SHOP"
 	shop := group.Group("/shop").
 		Use(authorization(api.jwt)).
-		Use(checkRole("SELLER")).
+		Use(checkRole("ROLE_SELLER")).
 		Use(getShopID()) // Middleware để lấy shop_id và lưu vào context
 	{
 		// Nhóm 1: Tổng quan
@@ -60,7 +60,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 	// Tất cả API trong nhóm này yêu cầu đăng nhập và có vai trò "ADMIN"
 	platform := group.Group("/platform").
 		Use(authorization(api.jwt)).
-		Use(checkRole("ADMIN")) // Sử dụng middleware từ ví dụ của bạn
+		Use(checkRole("ROLE_ADMIN")) // Sử dụng middleware từ ví dụ của bạn
 	{
 		// Nhóm 1: Tổng quan
 		platform.GET("/overview", api.getPlatformOverview())
@@ -98,6 +98,14 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 		platform.GET("/customer-support/statistics", api.getCustomerSupportStatistics())
 		platform.GET("/customer-support/feedbacks", api.listCustomerFeedbacks())
 		platform.GET("/customer-support/feedbacks/:id", api.getCustomerFeedbackDetail())
+
+		// Nhóm 9: Thống kê Agent Analytics (AI Agent)
+		platform.GET("/agent-analytics/dashboard", api.getDashboardStats())
+		platform.GET("/agent-analytics/message-volume", api.getMessageVolumeByHour())
+		platform.GET("/agent-analytics/top-users", api.getTopActiveUsers())
+		platform.GET("/agent-analytics/topics", api.getTopicStats())
+		platform.GET("/agent-analytics/purchase-intent", api.getPurchaseIntentStats())
+		platform.GET("/agent-analytics/top-categories", api.getTopMentionedCategories())
 
 	}
 

@@ -27,6 +27,7 @@ func (s *service) ListUserOrders(ctx context.Context, userID string, query servi
 	if err != nil {
 		return nil, assets_services.NewError(400, fmt.Errorf("lỗi khi lấy đơn hàng: %w", err))
 	}
+	//
 	totalElements, err := s.repository.ListShopOrdersByStatusCount(ctx, db.ListShopOrdersByStatusCountParams{
 		UserID: userID,
 		Status: db.NullShopOrdersStatus{
@@ -34,6 +35,9 @@ func (s *service) ListUserOrders(ctx context.Context, userID string, query servi
 			Valid:            status != "",
 		},
 	})
+	if err != nil {
+		return nil, assets_services.NewError(400, fmt.Errorf("lỗi khi đếm đơn hàng: %w", err))
+	}
 	// Build order summaries
 	orderSummaries := make([]services.ShopOrderDetail, len(orders))
 	for i, order := range orders {
@@ -42,7 +46,7 @@ func (s *service) ListUserOrders(ctx context.Context, userID string, query servi
 		if err != nil {
 			return nil, assets_services.NewError(400, fmt.Errorf("lỗi khi lấy order items: %w", err))
 		}
-		orderSummaries[i] = convertDBShopOrderToService(order, OrderItems)
+		orderSummaries[i] = s.convertDBShopOrderToService(order, OrderItems)
 	}
 	totalPage := totalElements / int64(query.PageSize)
 
@@ -56,7 +60,7 @@ func (s *service) ListUserOrders(ctx context.Context, userID string, query servi
 }
 
 // GetOrderDetail lấy chi tiết đầy đủ của một đơn hàng
-func (s *service) GetOrderDetail(ctx context.Context, userID, orderCode string) (map[string]interface{}, *assets_services.ServiceError) {
+func (s *service) GetOrderDetail(ctx context.Context, userID, user_role, orderCode string) (map[string]interface{}, *assets_services.ServiceError) {
 	// Lấy main order
 	order_shop, err := s.repository.GetShopOrderByID(ctx, orderCode)
 	if err != nil {
@@ -69,7 +73,7 @@ func (s *service) GetOrderDetail(ctx context.Context, userID, orderCode string) 
 	if err != nil {
 		return nil, assets_services.NewError(400, fmt.Errorf("lỗi khi lấy order items: %w", err))
 	}
-	orderSummary := convertDBShopOrderToService(order_shop, OrderItems)
+	orderSummary := s.convertDBShopOrderToService(order_shop, OrderItems)
 
 	order, err := s.repository.GetOrderByID(ctx, order_shop.OrderID)
 	if err != nil {
@@ -79,7 +83,7 @@ func (s *service) GetOrderDetail(ctx context.Context, userID, orderCode string) 
 		return nil, assets_services.NewError(500, fmt.Errorf("lỗi khi lấy đơn hàng: %w", err))
 	}
 	// Verify order thuộc về user
-	if order.UserID != userID {
+	if order.UserID != userID && user_role == "ROLE_USER" {
 		return nil, assets_services.NewError(403, fmt.Errorf("bạn không có quyền xem đơn hàng này"))
 	}
 
@@ -128,7 +132,9 @@ func (s *service) GetOrderDetail(ctx context.Context, userID, orderCode string) 
 		CreatedAt:                   order.CreatedAt.Format("2006-01-02 15:04:05"),
 		UpdatedAt:                   order.UpdatedAt.Format("2006-01-02 15:04:05"),
 	}
-
+	orderSummary.SiteOrderDiscount = siteOrderDiscount * ((orderSummary.Subtotal - orderSummary.ShopVoucherDiscount) / subtotal)
+	orderSummary.SiteShippingDiscount = siteShippingDiscount * (orderSummary.ShippingFee / totalShippingFee)
+	orderSummary.TotalDiscount += orderSummary.SiteOrderDiscount + orderSummary.SiteShippingDiscount + orderSummary.ShopVoucherDiscount
 	response := map[string]interface{}{
 		"order":      orderDetail,
 		"order_shop": orderSummary,
@@ -137,11 +143,17 @@ func (s *service) GetOrderDetail(ctx context.Context, userID, orderCode string) 
 }
 
 // SearchOrdersDetail lấy danh sách đơn hàng chi tiết với các bộ lọc
-func (s *service) SearchOrdersDetail(ctx context.Context, user_id string, filter services.ShopOrderSearchFilter) (map[string]interface{}, *assets_services.ServiceError) {
+func (s *service) SearchOrdersDetail(ctx context.Context, user_id string, user_type string, filter services.ShopOrderSearchFilter) (map[string]interface{}, *assets_services.ServiceError) {
 
+	if user_type == "ROLE_USER" && user_id == "" {
+		return nil, assets_services.NewError(403, fmt.Errorf("bạn không có quyền xem đơn hàng này"))
+	}
+	if user_type == "ROLE_ADMIN" || user_type == "ROLE_SELLER" {
+		user_id = ""
+	}
 	// Chuyển đổi filter sang params cho sqlc
 	params := db.SearchShopOrdersParams{
-		UserID: user_id,
+		UserID: sql.NullString{String: user_id, Valid: user_id != ""},
 		Limit:  int32(filter.PageSize),
 		Offset: int32(filter.PageSize * (filter.Page - 1)),
 	}
@@ -263,7 +275,7 @@ func (s *service) SearchOrdersDetail(ctx context.Context, user_id string, filter
 		}
 
 		// Convert shop order detail
-		shopOrderDetail := convertDBShopOrderToService(shopOrder, orderItems)
+		shopOrderDetail := s.convertDBShopOrderToService(shopOrder, orderItems)
 
 		// Lấy main order
 		mainOrder, err := s.repository.GetOrderByID(ctx, shopOrder.OrderID)
@@ -319,6 +331,9 @@ func (s *service) SearchOrdersDetail(ctx context.Context, user_id string, filter
 			UpdatedAt:                   mainOrder.UpdatedAt.Format("2006-01-02 15:04:05"),
 		}
 
+		shopOrderDetail.SiteOrderDiscount = siteOrderDiscount * ((shopOrderDetail.Subtotal - shopOrderDetail.ShopVoucherDiscount) / subtotal)
+		shopOrderDetail.SiteShippingDiscount = siteShippingDiscount * (shopOrderDetail.ShippingFee / totalShippingFee)
+		shopOrderDetail.TotalDiscount += shopOrderDetail.SiteOrderDiscount + shopOrderDetail.SiteShippingDiscount + shopOrderDetail.ShopVoucherDiscount
 		// Combine vào response
 		result := map[string]interface{}{
 			"order":      orderDetail,
@@ -346,8 +361,8 @@ func (s *service) SearchOrdersDetail(ctx context.Context, user_id string, filter
 	return response, nil
 }
 
-func convertDBShopOrderToService(shopOrder db.ShopOrders, Item []db.OrderItems) services.ShopOrderDetail {
-
+func (s *service) convertDBShopOrderToService(shopOrder db.ShopOrders, Item []db.OrderItems) services.ShopOrderDetail {
+	ctx := context.Background()
 	shopSubtotal, _ := parseFloat(shopOrder.Subtotal)
 	shippingFee, _ := parseFloat(shopOrder.ShippingFee)
 	// shopShippingFee, _ := parseFloat(shopOrder.ShippingFee)
@@ -397,9 +412,15 @@ func convertDBShopOrderToService(shopOrder db.ShopOrders, Item []db.OrderItems) 
 		if item.ProductImageSnapshot.Valid {
 			temp.ProductImage = &item.ProductImageSnapshot.String
 		}
+		hehe, _ := s.CheckReviewedItems(ctx, services.CheckReviewedItemsRequest{
+			OrderItemIDs: []string{item.ID},
+		})
+		if len(hehe.ReviewedOrderItemIDs) > 0 {
+			temp.Reviewed = true
+		}
 		temp.SkuAttributes = item.SkuAttributesSnapshot.String
-		promotions, _ := item.PromotionsSnapshot.MarshalJSON()
-		_ = json.Unmarshal(promotions, &temp.PromotionsSnapshot)
+		promotions := item.PromotionsSnapshot.String
+		_ = json.Unmarshal([]byte(promotions), &temp.PromotionsSnapshot)
 		itemDetails = append(itemDetails, temp)
 	}
 	return services.ShopOrderDetail{

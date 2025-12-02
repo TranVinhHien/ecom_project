@@ -68,6 +68,18 @@ func main() {
 	log.Info().Msg("Connect to database interact successfully")
 	db_interact := db.NewStoreInteract(conn_interact)
 
+	// create connect to interact database
+	conn_agent_ai_db, err := connectDBWithRetry(5, env.DBSourceAgentAIDB)
+	if conn_agent_ai_db == nil {
+		log.Err(err).Msg("Error when created connect to database interact")
+		return
+	}
+	// close connection after gin stopped
+	defer conn_agent_ai_db.Close()
+
+	log.Info().Msg("Connect to database interact successfully")
+	db_agent_ai_db := db.NewStoreAgentAIDB(conn_agent_ai_db)
+
 	log.Info().Msg("Creating gin server...")
 	// create jwt
 	jwtMaker, err := token.NewJWTMaker(env.JWTSecret)
@@ -80,7 +92,7 @@ func main() {
 	APIServer := server.NewAPIServices(env, time.Second*10)
 
 	// setup service
-	services := services.NewService(db_order, db_transaction, db_interact, jwtMaker, env, APIServer)
+	services := services.NewService(db_order, db_transaction, db_interact, db_agent_ai_db, jwtMaker, env, APIServer)
 	// setup controller
 	controller := controllers.NewAPIController(services, jwtMaker)
 
@@ -111,6 +123,13 @@ func connectDBWithRetry(times int, dbConfig string) (*sql.DB, error) {
 	_, cancel := context.WithTimeout(context.Background(), time.Second*2*time.Duration(times))
 	defer cancel()
 	for i := 1; i <= times; i++ {
+		// Thêm parseTime=true&loc=Asia%2FHo_Chi_Minh vào dbConfig
+		if dbConfig[len(dbConfig)-1] == '/' {
+			dbConfig += "?parseTime=true&loc=Asia%2FHo_Chi_Minh"
+		} else {
+			dbConfig += "&parseTime=true&loc=Asia%2FHo_Chi_Minh"
+		}
+
 		pool, err := sql.Open("mysql", dbConfig)
 		if err != nil {
 			log.Err(err).Msg("Can't create database pool")
@@ -119,11 +138,17 @@ func connectDBWithRetry(times int, dbConfig string) (*sql.DB, error) {
 		if err != nil {
 			log.Err(err).Msg("Can't get connection to database pool")
 		}
-		// defer conn.Release()
-		pool.SetMaxOpenConns(10)                 // Số kết nối tối đa có thể mở
-		pool.SetMaxIdleConns(1)                  // Số kết nối có thể giữ mà không bị đóng
-		pool.SetConnMaxLifetime(5 * time.Minute) // Thời gian tối đa một kết nối có thể sống
+
+		pool.SetMaxOpenConns(10)
+		pool.SetMaxIdleConns(1)
+		pool.SetConnMaxLifetime(5 * time.Minute)
+
 		if err == nil {
+			// Set timezone cho session MySQL
+			_, err = pool.Exec("SET time_zone = '+07:00'")
+			if err != nil {
+				log.Err(err).Msg("Can't set timezone")
+			}
 			return pool, nil
 		}
 		e = err

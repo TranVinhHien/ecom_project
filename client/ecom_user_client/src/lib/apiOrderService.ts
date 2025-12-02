@@ -25,7 +25,7 @@ const processQueue = (error: AxiosError | null, token: string | null = null) => 
 
 // Tạo instance axios với baseURL từ environment variable
 const apiOrderClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_ORDER_SERVICE_URL || API.base_gateway,
+  baseURL: process.env.NEXT_PUBLIC_API_GATEWAY_URL || API.base_order,
   headers: {
     'Content-Type': 'application/json',
   },

@@ -134,6 +134,13 @@ func connectDBWithRetry(times int, dbConfig string) (*sql.DB, error) {
 	_, cancel := context.WithTimeout(context.Background(), time.Second*2*time.Duration(times))
 	defer cancel()
 	for i := 1; i <= times; i++ {
+		// Thêm parseTime=true&loc=Asia%2FHo_Chi_Minh vào dbConfig
+		if dbConfig[len(dbConfig)-1] == '/' {
+			dbConfig += "?parseTime=true&loc=Asia%2FHo_Chi_Minh"
+		} else {
+			dbConfig += "&parseTime=true&loc=Asia%2FHo_Chi_Minh"
+		}
+
 		pool, err := sql.Open("mysql", dbConfig)
 		if err != nil {
 			log.Err(err).Msg("Can't create database pool")
@@ -142,11 +149,18 @@ func connectDBWithRetry(times int, dbConfig string) (*sql.DB, error) {
 		if err != nil {
 			log.Err(err).Msg("Can't get connection to database pool")
 		}
-		// defer conn.Release()
-		pool.SetMaxOpenConns(10)                 // Số kết nối tối đa có thể mở
-		pool.SetMaxIdleConns(1)                  // Số kết nối có thể giữ mà không bị đóng
-		pool.SetConnMaxLifetime(5 * time.Minute) // Thời gian tối đa một kết nối có thể sống
+
+		pool.SetMaxOpenConns(60)
+		pool.SetMaxIdleConns(60)
+		pool.SetConnMaxLifetime(5 * time.Minute)
+		pool.SetConnMaxIdleTime(2 * time.Minute)
+
 		if err == nil {
+			// Set timezone cho session MySQL
+			_, err = pool.Exec("SET time_zone = '+07:00'")
+			if err != nil {
+				log.Err(err).Msg("Can't set timezone")
+			}
 			return pool, nil
 		}
 		e = err

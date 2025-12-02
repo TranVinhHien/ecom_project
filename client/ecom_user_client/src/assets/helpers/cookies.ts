@@ -12,7 +12,7 @@ if (typeof window !== 'undefined') {
 
 const getCookieValues = <T>(key: string): T | undefined => {
     const value = getCookie(key);
-    console.log("Get Cookie Value:", key, value);
+    // console.log("Get Cookie Value:", key, value);
     if (!value) {
         return undefined;
     }

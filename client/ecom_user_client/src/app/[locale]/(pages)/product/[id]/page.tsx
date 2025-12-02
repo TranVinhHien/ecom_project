@@ -5,30 +5,35 @@ import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { useRouter, usePathname } from "@/i18n/routing"
-import { ShoppingCart, Heart, Minus, Plus } from 'lucide-react';
+import { ShoppingCart, Heart, Minus, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
 import { Loading } from "@/components/ui/loading";
 import { cn } from '@/lib/utils';
 import { ProductDetailApiResponse, ProductSKU, ProductOptionValue } from '@/types/product.types';
-import { useCartStore } from '@/store/cartStore';
+import { useCart } from '@/hooks/useCart';
 import { useCheckoutStore } from '@/store/checkoutStore';
 import ROUTER from '@/assets/configs/routers';
-
-// Helper to get image URL
-const getImageUrl = (imagePath: string | null | undefined) => {
-  if (!imagePath) return '/placeholder.png';
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-    return imagePath;
-  }
-  return `http://${imagePath}`;
-};
+import API from '@/assets/configs/api';
+import ProductComments from '@/components/ProductComments';
+import { useChatStore } from '@/store/chatStore';
+import { getImageUrl } from '@/assets/helpers/convert_tool';
+import ImageGalleryModal from '@/components/ImageGalleryModal';
+import ShopInfo from '@/components/ShopInfo';
+import { UserProfile } from '@/types/user.types';
+import { INFO_USER } from '@/assets/configs/request';
+import { useCollectData } from '@/services/apiService';
+import { event_type } from '@/types/collection.types';
+import C_ProductSimple from '@/resources/components_thuongdung/product';
+import { ProductSummary } from '@/types/product.types';
 
 // Image Slider Component
-const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage }: {
+const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage, onImageClick, shopId }: {
   images: string[];
   currentIndex: number;
   setCurrentIndex: (index: number) => void;
   optionImage: string | null;
+  onImageClick: (index: number) => void;
+  shopId?: string;
 }) => {
   const [isAutoSlide, setIsAutoSlide] = useState(true);
 // const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -45,10 +50,15 @@ const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage
   // Display option image temporarily when selected
   const displayImage = optionImage || images[currentIndex];
 
+
+
   return (
     <div className="sticky top-8">
       {/* Main Image */}
-      <div className="relative w-full aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4">
+      <div 
+        className="relative w-full aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 cursor-pointer group"
+        onClick={() => onImageClick(currentIndex)}
+      >
         <Button
           variant="ghost"
           size="icon"
@@ -100,6 +110,18 @@ const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage
           <svg width="24" height="24" fill="none" stroke="currentColor"><path d="M9 6l6 6-6 6"/></svg>
         </Button>
 
+        {/* Zoom overlay on hover */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all flex items-center justify-center">
+          <svg 
+            className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+          </svg>
+        </div>
+
         {/* Image Counter */}
         <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
           {optionImage ? 'Option Preview' : `${currentIndex + 1} / ${images.length}`}
@@ -140,6 +162,165 @@ const ProductImageSlider = ({ images, currentIndex, setCurrentIndex, optionImage
           </button>
         ))}
       </div>
+
+      {/* Shop Info Section - Below Thumbnails */}
+      {shopId && (
+        <div className="mt-4">
+          <ShopInfo shopId={shopId} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Similar Products Component
+const SimilarProducts = ({ productId, userId, productData }: { 
+  productId: string; 
+  userId: string;
+  productData: any;
+}) => {
+  const t = useTranslations("System");
+  const [similarProducts, setSimilarProducts] = useState<ProductSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchSimilarProducts = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Build query string from product data
+        const queryParts = [];
+        
+        // Add product name
+        if (productData.product?.name) {
+          queryParts.push(productData.product.name);
+        }
+        
+        // Add short description
+        if (productData.product?.short_description) {
+          queryParts.push(productData.product.short_description);
+        }
+        
+        // Add brand name
+        if (productData.brand?.name) {
+          queryParts.push(productData.brand.name);
+        }
+        
+        // Add category name
+        if (productData.category?.name) {
+          queryParts.push(productData.category.name);
+        }
+
+        const queryText = queryParts.join(' ');
+
+        if (!queryText) {
+          setSimilarProducts([]);
+          return;
+        }
+
+        // Call vector search API
+        const searchResponse = await fetch('http://localhost:9101/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query_text: queryText,
+            top_k: 15,
+            doc_type: 'product',
+          }),
+        });
+
+        if (!searchResponse.ok) {
+          throw new Error('Failed to fetch similar products');
+        }
+
+        const searchData = await searchResponse.json();
+
+        if (searchData.results && searchData.results.length > 0) {
+          // Filter out current product and transform results
+          const transformedProducts: ProductSummary[] = searchData.results
+            .filter((item: any) => item.product.id !== productId) // Exclude current product
+            .slice(0, 10) // Limit to 10 products
+            .map((item: any) => {
+              // Calculate min and max price from SKU array
+              const prices = item.sku?.map((s: any) => s.price) || [0];
+              const minPrice = Math.min(...prices);
+              const maxPrice = Math.max(...prices);
+
+              return {
+                id: item.product.id,
+                name: item.product.name,
+                key: item.product.key,
+                image: item.product.image,
+                shop_id: item.product.shop_id || '',
+                brand_id: item.brand || '',
+                category_id: item.category || '',
+                min_price: minPrice,
+                max_price: maxPrice,
+                min_price_sku_id: item.sku?.[0]?.id || '',
+                max_price_sku_id: item.sku?.[item.sku.length - 1]?.id || '',
+                description: item.product.short_description || '',
+                total_sold: 0,
+                short_description: item.product.short_description || '',
+                media: null,
+                product_is_permission_check: item.product.product_is_permission_check || false,
+                product_is_permission_return: item.product.product_is_permission_return || false,
+                delete_status: 'active',
+                rating: {
+                  average_rating: 0,
+                  total_reviews: 0
+                }
+              };
+            });
+          
+          setSimilarProducts(transformedProducts);
+        } else {
+          setSimilarProducts([]);
+        }
+      } catch (err) {
+        console.error('Error fetching similar products:', err);
+        setError('Không thể tải sản phẩm tương tự');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (productId && productData) {
+      fetchSimilarProducts();
+    }
+  }, [productId, productData]);
+
+  if (isLoading) {
+    return (
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold mb-6">Sản phẩm tương tự</h2>
+        <div className="flex justify-center py-12">
+          <Loading size="lg" variant="primary" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || similarProducts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-2xl font-bold mb-6">Sản phẩm tương tự</h2>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {similarProducts.map((product) => (
+          <C_ProductSimple 
+            key={product.id} 
+            product={product}
+            collection_type="click"
+            user_id={userId}
+          />
+        ))}
+      </div>
     </div>
   );
 };
@@ -148,8 +329,9 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   
   const t = useTranslations("System");
   const router = useRouter();
-  const { addToCart } = useCartStore();
+  const { addToCart: addToCartAction, isAddingToCart } = useCart();
   const { setCheckoutItems } = useCheckoutStore();
+  const { openChatWithMessage } = useChatStore();
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -157,18 +339,52 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   const [quantity, setQuantity] = useState(1);
   const [optionPreviewImage, setOptionPreviewImage] = useState<string | null>(null);
   const [previewTimer, setPreviewTimer] = useState<NodeJS.Timeout | null>(null);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // Fetch product detail
   const { data, isLoading, error } = useQuery<ProductDetailApiResponse>({
     queryKey: ['product-detail', params.id],
     queryFn: async () => {
       const response = await apiClient.get(`/product/getdetail/${params.id}`,{
-        customBaseURL:process.env.NEXT_PUBLIC_API_GATEWAY_URL
+        customBaseURL:process.env.NEXT_PUBLIC_API_GATEWAY_URL||API.base_product 
       });
       console.log('Product Detail Response:', response.data);
       return response.data;
     },
   });
+
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
+    const collectMutation = useCollectData();
+  
+    const onProductClick =async (event_type: event_type,quantity?: number) => {
+      let user_id = profile?.id || "";
+      if (!user_id){
+        user_id = "guest";
+      }
+      await collectMutation.mutateAsync({
+            product_id: data?.result.data.product.id || "",
+            event_type:event_type ,
+            user_id: user_id, 
+            shop_id: data?.result.data.product.shop_id,
+            price: data?.result.data.product.min_price,
+            quantity: quantity || 1,
+          });
+    }
 
   const productData = data?.result?.data;
   const product = productData?.product;
@@ -245,8 +461,25 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     };
   }, [previewTimer]);
 
+  // Handle image click to open gallery
+  const handleImageClick = (index: number) => {
+    setGalleryInitialIndex(index);
+    setIsGalleryOpen(true);
+  };
+
+  // Generate notes for product images
+  const imageNotes = React.useMemo(() => {
+    if (!product) return [];
+    return images.map((_, idx) => {
+      if (idx === 0) {
+        return `Ảnh chính: ${product.name}`;
+      }
+      return `Ảnh ${idx}: ${product.name}`;
+    });
+  }, [images, product]);
+
   // Handle Add to Cart
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!selectedSku || !product) {
       alert(t("vui_long_chon_day_du_thuoc_tinh"));
       return;
@@ -267,18 +500,31 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       const optionValue = option?.values.find(v => v.option_value_id === value);
       return `${key}: ${optionValue?.value || ''}`;
     }).join(', ');
-
-    addToCart({
+    await onProductClick("cart_add", quantity);
+    // Sử dụng useCart hook - tự động xử lý API hoặc localStorage
+    const success = await addToCartAction({
       sku_id: selectedSku.id,
       shop_id: product.shop_id,
       name: `${product.name} (${selectedOptionsText})`,
       image: product.image,
       price: selectedSku.price,
       quantity: quantity,
-      sku_name:selectedSku.sku_name,
+      sku_name: selectedSku.sku_name,
+      isSelected: true,
     });
 
-    alert(t("them_vao_gio_hang_thanh_cong"));
+    if (success) {
+      // Toast đã được hiển thị trong useCart hook
+      // Không cần alert ở đây nữa
+    }
+  };
+
+  // Handle Ask AI for Product Suggestion
+  const handleAskAI = () => {
+    if (!product) return;
+    
+    const message = `Gợi ý sản phẩm ${product.name}`;
+    openChatWithMessage(message, product.key);
   };
 
   // Handle Buy Now
@@ -297,14 +543,15 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       alert(t("so_luong_vuot_qua_ton_kho"));
       return;
     }
-
+    onProductClick("purchase", quantity);
     const selectedOptionsText = Object.entries(selectedOptions).map(([key, value]) => {
       const option = options.find(opt => opt.option_name === key);
       const optionValue = option?.values.find(v => v.option_value_id === value);
       return `${key}: ${optionValue?.value || ''}`;
     }).join(', ');
 
-    // Set checkout items in Zustand store
+    // ❌ KHÔNG ĐÁNH DẤU: Items này KHÔNG TỪ GIỎ HÀNG (Mua ngay - không xóa gì)
+    // Set checkout items in Zustand store với flag isFromCart = false
     setCheckoutItems([{
       sku_id: selectedSku.id,
       shop_id: product.shop_id,
@@ -313,7 +560,8 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       name: `${product.name} (${selectedOptionsText})`,
       price: selectedSku.price,
       image: product.image,
-    }]);
+      sku_name: selectedSku.sku_name,
+    }], false); // ✅ false = KHÔNG phải từ giỏ hàng
 
     router.push(ROUTER.thanhtoan);
   };
@@ -343,6 +591,8 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
           currentIndex={currentImageIndex}
           setCurrentIndex={setCurrentImageIndex}
           optionImage={optionPreviewImage}
+          onImageClick={handleImageClick}
+          shopId={product?.shop_id}
         />
 
         {/* Right: Product Info */}
@@ -465,10 +715,10 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               variant="outline"
               className="flex-1"
               onClick={handleAddToCart}
-              disabled={!selectedSku || selectedSku.quantity === 0}
+              disabled={!selectedSku || selectedSku.quantity === 0 || isAddingToCart}
             >
               <ShoppingCart className="w-4 h-4 mr-2" />
-              {t("them_vao_gio_hang")}
+              {isAddingToCart ? t("dang_them") : t("them_vao_gio_hang")}
             </Button>
             <Button
               className="flex-1"
@@ -477,7 +727,12 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
             >
               {t("mua_ngay")}
             </Button>
-            <Button variant="outline" size="icon">
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={handleAskAI}
+              title={t("goi_y_tu_ai")}
+            >
               <Heart className="w-4 h-4" />
             </Button>
           </div>
@@ -504,16 +759,65 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
           {/* Description */}
           {product?.description && (
+
             <div className="border-t pt-6">
-              <h2 className="text-xl font-bold mb-4">{t("mo_ta_san_pham")}</h2>
-              <div 
-                className="prose max-w-none text-gray-700"
-                dangerouslySetInnerHTML={{ __html: product.description }}
-              />
+              <Button
+                variant="ghost"
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
+                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+              >
+                <h2 className="text-xl font-bold">{t("mo_ta_san_pham")}</h2>
+                {isDescriptionExpanded ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
+              </Button>
+              
+              {isDescriptionExpanded && (
+                <>
+                  <div 
+                    className="prose max-w-none text-gray-700 mt-4 px-4"
+                    dangerouslySetInnerHTML={{ __html: product.description }}
+                  />
+                  {/* Collapse button at bottom */}
+                  <div className="flex justify-center pt-4 pb-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsDescriptionExpanded(false)}
+                      className="gap-2"
+                    >
+                      <ChevronUp className="w-4 h-4" />
+                      {t("an_bot")}
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Product Comments Section */}
+      <div className="mt-8">
+        <ProductComments productId={data.result.data.product.id} />
+      </div>
+
+      {/* Similar Products Section */}
+      <SimilarProducts 
+        productId={data.result.data.product.id} 
+        userId={profile?.id || "guest"}
+        productData={productData}
+      />
+
+      {/* Image Gallery Modal */}
+      <ImageGalleryModal
+        images={images}
+        initialIndex={galleryInitialIndex}
+        isOpen={isGalleryOpen}
+        onClose={() => setIsGalleryOpen(false)}
+        notes={imageNotes}
+      />
     </div>
   );
 }

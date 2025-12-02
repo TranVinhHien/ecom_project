@@ -3,36 +3,22 @@
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "@/i18n/routing"
 
-import { useState, useEffect } from "react";
-import { useGetProducts } from "@/services/apiService";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { useState, useEffect, useMemo } from "react";
+import { useGetActiveBanners, useGetProducts } from "@/services/apiService";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShoppingCart, Heart, SlidersHorizontal } from "lucide-react";
-import { Link } from '@/i18n/routing';
-import Image from "next/image";
-import { useCartStore } from "@/store/cartStore";
-import { useToast } from "@/hooks/use-toast";
-import ROUTER from "@/assets/configs/routers";
+import { SlidersHorizontal } from "lucide-react";
+import {getImageUrl} from "@/assets/helpers/convert_tool";
+import C_ProductSimple from "@/resources/components_thuongdung/product";
+import { UserProfile } from "@/types/user.types";
+import { INFO_USER } from "@/assets/configs/request";
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { toast } = useToast();
-  const addToCart = useCartStore((state) => state.addToCart);
-
-  // Helper để xử lý image URL
-  const getImageUrl = (imageUrl: string | null | undefined) => {
-    if (!imageUrl) return "/placeholder.png";
-    // Nếu là URL đầy đủ (http/https) thì giữ nguyên
-    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-      return imageUrl;
-    }
-    // Nếu không có protocol, thêm http:// vào đầu
-    return `http://${imageUrl}`;
-  };
 
   // Lấy params từ URL
   const cate_path = searchParams.get("cate_path") || undefined;
@@ -48,12 +34,27 @@ export default function SearchPage() {
   const [priceMax, setPriceMax] = useState<number | undefined>(undefined);
   const [brand, setBrand] = useState<string | undefined>(brandParam);
   const [showFilters, setShowFilters] = useState(false);
+  // const [profile, setProfile] = useState<UserProfile   | null>(null);
+ 
 
   // Reset page về 1 khi thay đổi filters
   useEffect(() => {
     setPage(1);
   }, [sortBy, priceMin, priceMax, brand, keywords, cate_path]);
 
+  const [profile, setProfile] = useState<UserProfile   | null>(null);
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
   // Gọi API
   const { data, isLoading, error } = useGetProducts({
     page,
@@ -66,14 +67,31 @@ export default function SearchPage() {
     price_max: priceMax,
     sort: sortBy === "default" ? undefined : (sortBy as any),
   });
+  const { data: categoryBanners } = useGetActiveBanners("CATEGORY");
+  const normalizedCatePath = cate_path ? decodeURIComponent(cate_path) : undefined;
+  const matchedCategoryBanner = useMemo(() => {
+    if (!categoryBanners || !normalizedCatePath) return null;
 
-  // Format giá
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("vi-VN", {
-      style: "currency",
-      currency: "VND",
-    }).format(price);
+    const matched = categoryBanners
+      .map((banner) => ({
+        banner,
+        meta: getBannerTargetMeta(banner.bannerUrl),
+      }))
+      .filter(({ meta }) => meta && meta.catePath === normalizedCatePath)
+      .sort((a, b) => (a.banner.bannerOrder || 0) - (b.banner.bannerOrder || 0));
+    return matched[0] || null;
+  }, [categoryBanners, normalizedCatePath]);
+
+  const handleBannerNavigation = (meta: BannerTargetMeta) => {
+    const href = resolveBannerHref(meta);
+    if (!href) return;
+    if (ABSOLUTE_URL_PATTERN.test(href)) {
+      window.open(href, "_blank", "noopener noreferrer");
+    } else {
+      router.push(href);
+    }
   };
+
 
   // Render skeleton khi loading
   if (isLoading) {
@@ -104,10 +122,32 @@ export default function SearchPage() {
       </div>
     );
   }
-
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
+      
+      {matchedCategoryBanner?.banner && matchedCategoryBanner.meta && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => handleBannerNavigation(matchedCategoryBanner.meta!)}
+            className="block w-full"
+          >
+            <div className="relative w-full h-40 md:h-67 lg:h-96 overflow-hidden rounded-xl shadow">
+
+  <img
+    src={getImageUrl(matchedCategoryBanner.banner.bannerImage)}
+    alt={matchedCategoryBanner.banner.bannerName}
+    
+    // SỬA: Thêm "block" và "mx-auto". Bỏ "center"
+    className=" w-[70vw] mx-auto  h-[500px] md:h-[500px]"
+    
+    // sizes="70vw"
+/>
+            </div>
+          </button>
+        </div>
+      )}
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-2">
           {keywords ? `Kết quả tìm kiếm cho "${keywords}"` : "Danh sách sản phẩm"}
@@ -126,10 +166,12 @@ export default function SearchPage() {
               <SelectValue placeholder="Sắp xếp theo" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="default">Mặc định</SelectItem>
+              <SelectItem value="default">Mới nhất</SelectItem>
               <SelectItem value="price_asc">Giá tăng dần</SelectItem>
               <SelectItem value="price_desc">Giá giảm dần</SelectItem>
-              <SelectItem value="newest">Mới nhất</SelectItem>
+              <SelectItem value="name_asc">Tên A-Z</SelectItem>
+              <SelectItem value="name_desc">Tên Z-A</SelectItem>
+              <SelectItem value="best_sell">Bán chạy nhất</SelectItem>
             </SelectContent>
           </Select>
 
@@ -217,69 +259,7 @@ export default function SearchPage() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
             {data.data.map((product) => (
-              <Card
-                key={product.id}
-                className="overflow-hidden hover:shadow-lg transition-shadow duration-300 group flex flex-col h-full"
-              >
-                <Link href={`/product/${product.key}`}>
-                  <div className="relative aspect-square overflow-hidden bg-gray-100">
-                    <Image
-                      src={getImageUrl(product.image)}
-                      alt={product.name}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-300"
-                      unoptimized
-                    />
-                    {/* Wishlist button */}
-                    <button
-                      className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toast({
-                          title: "Đã thêm vào yêu thích",
-                          description: product.name,
-                        });
-                      }}
-                    >
-                      <Heart className="w-4 h-4 text-gray-600" />
-                    </button>
-                  </div>
-                </Link>
-
-                <CardContent className="p-4 flex-1 flex flex-col">
-                  <Link href={`${ROUTER.product}/${product.key}`}>
-                    <h3 className="font-medium text-sm mb-2 line-clamp-2 hover:text-[hsl(var(--primary))] min-h-[40px]">
-                      {product.name}
-                    </h3>
-                  </Link>
-
-                  <div className="flex items-baseline gap-2 mt-auto">
-                    {product.min_price === product.max_price ? (
-                      <span className="text-[hsl(var(--primary))] font-bold text-lg">
-                        {formatPrice(product.min_price)}
-                      </span>
-                    ) : (
-                      <>
-                        <span className="text-[hsl(var(--primary))] font-bold text-lg">
-                          {formatPrice(product.min_price)}
-                        </span>
-                        <span className="text-gray-400 text-sm">
-                          - {formatPrice(product.max_price)}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-
-                <CardFooter className="p-4 pt-0">
-                  <Link href={`${ROUTER.product}/${product.key}`} className="w-full">
-                    <Button className="w-full bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/.9)]">
-                      {/* <ShoppingCart className="w-4 h-4 mr-2" /> */}
-                      Xem chi tiết
-                    </Button>
-                  </Link>
-                </CardFooter>
-              </Card>
+              <C_ProductSimple key={product.id} product={product} collection_type="search" user_id={profile?.userId} />
             ))}
           </div>
 
@@ -354,3 +334,55 @@ export default function SearchPage() {
     </div>
   );
 }
+
+const TIM_KIEM_PREFIX = "timkiem-";
+const ABSOLUTE_URL_PATTERN = /^https?:\/\//i;
+const FALLBACK_ORIGIN = "http://localhost:3000";
+
+interface BannerTargetMeta {
+  normalizedUrl: string;
+  catePath?: string;
+}
+
+const getBannerTargetMeta = (rawUrl?: string | null): BannerTargetMeta | null => {
+  if (!rawUrl) return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  const lower = trimmed.toLowerCase();
+  const hasPrefix = lower.startsWith(TIM_KIEM_PREFIX);
+  const normalizedUrl = hasPrefix ? trimmed.slice(TIM_KIEM_PREFIX.length) : trimmed;
+  const normalizedLower = normalizedUrl.toLowerCase();
+
+  if (!hasPrefix && !normalizedLower.startsWith("/tim-kiem") && !normalizedLower.startsWith("tim-kiem")) {
+    return null;
+  }
+
+  try {
+    const urlObj = buildUrlFromMaybeRelative(normalizedUrl);
+    const catePath = urlObj.searchParams.get("cate_path");
+
+    return {
+      normalizedUrl,
+      catePath: catePath ? decodeURIComponent(catePath) : undefined,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const buildUrlFromMaybeRelative = (value: string) => {
+  if (ABSOLUTE_URL_PATTERN.test(value)) {
+    return new URL(value);
+  }
+  const absolutePath = value.startsWith("/") ? value : `/${value}`;
+  return new URL(absolutePath, FALLBACK_ORIGIN);
+};
+
+const resolveBannerHref = (meta?: BannerTargetMeta | null) => {
+  if (!meta || !meta.normalizedUrl) return undefined;
+  if (ABSOLUTE_URL_PATTERN.test(meta.normalizedUrl)) {
+    return meta.normalizedUrl;
+  }
+  return meta.normalizedUrl.startsWith("/") ? meta.normalizedUrl : `/${meta.normalizedUrl}`;
+};

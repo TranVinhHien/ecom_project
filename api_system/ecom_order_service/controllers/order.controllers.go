@@ -68,6 +68,24 @@ func (api *apiController) listUserOrders() func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, assets_api.SimpSuccessResponse("Get orders successfully", result))
 	}
 }
+func (api *apiController) getProductTotalSold() func(ctx *gin.Context) {
+	return func(ctx *gin.Context) {
+
+		var req services.GetBulkProductRatingStatsRequest
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Invalid request body: "+err.Error()))
+			return
+		}
+
+		result, err := api.service.GetProductTotalSold(ctx, req.ProductIDs)
+		if err != nil {
+			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
+			return
+		}
+
+		ctx.JSON(http.StatusOK, assets_api.SimpSuccessResponse("Get getProductTotalSold successfully", result))
+	}
+}
 
 // getOrderDetail lấy chi tiết đầy đủ của một đơn hàng
 func (api *apiController) getOrderDetail() func(ctx *gin.Context) {
@@ -80,7 +98,7 @@ func (api *apiController) getOrderDetail() func(ctx *gin.Context) {
 			return
 		}
 
-		result, err := api.service.GetOrderDetail(ctx, authPayload.Sub, orderCode)
+		result, err := api.service.GetOrderDetail(ctx, authPayload.Sub, authPayload.Scope, orderCode)
 		if err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return
@@ -114,7 +132,7 @@ func (api *apiController) searchOrdersDetail() func(ctx *gin.Context) {
 
 		// Parse basic fields (không bao gồm time)
 		var filter services.ShopOrderSearchFilter
-		
+
 		// Parse basic parameters
 		if status := ctx.Query("status"); status != "" {
 			filter.Status = &status
@@ -144,7 +162,7 @@ func (api *apiController) searchOrdersDetail() func(ctx *gin.Context) {
 				filter.PageSize = val
 			}
 		}
-		
+
 		filter.SortBy = ctx.Query("sort_by")
 
 		// Parse time fields
@@ -242,7 +260,7 @@ func (api *apiController) searchOrdersDetail() func(ctx *gin.Context) {
 		}
 
 		// Call service
-		result, errSvc := api.service.SearchOrdersDetail(ctx, authPayload.Sub, filter)
+		result, errSvc := api.service.SearchOrdersDetail(ctx, authPayload.Sub, authPayload.Scope, filter)
 		if errSvc != nil {
 			ctx.JSON(errSvc.Code, assets_api.ResponseError(errSvc.Code, errSvc.Error()))
 			return
@@ -259,33 +277,30 @@ func (api *apiController) searchOrdersDetail() func(ctx *gin.Context) {
 // listShopOrders lấy danh sách đơn hàng cho shop owner
 func (api *apiController) listShopOrders() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		authPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
+		_ = ctx.MustGet(authorizationPayload).(*token.Payload)
 
 		// Giả định shopID lấy từ token hoặc query param
 		// Trong production, bạn có thể lấy từ user profile
 		shopID := ctx.Query("shop_id")
+
 		if shopID == "" {
 			// Fallback: sử dụng userID làm shopID nếu không có
-			shopID = authPayload.Sub
+			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "shop_id query parameter is required"))
+			return
 		}
 
 		page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
 
-		var status *string
+		var status string
 		if statusParam := ctx.Query("status"); statusParam != "" {
-			status = &statusParam
+			status = statusParam
 		}
 
-		var dateFrom, dateTo *string
-		if df := ctx.Query("date_from"); df != "" {
-			dateFrom = &df
-		}
-		if dt := ctx.Query("date_to"); dt != "" {
-			dateTo = &dt
-		}
-
-		result, err := api.service.ListShopOrders(ctx, shopID, status, page, limit, dateFrom, dateTo)
+		result, err := api.service.ListShopOrders(ctx, shopID, status, services.QueryFilter{
+			Page:     page,
+			PageSize: limit,
+		})
 		if err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return
@@ -298,57 +313,60 @@ func (api *apiController) listShopOrders() func(ctx *gin.Context) {
 // shipShopOrder đánh dấu đơn hàng của shop đã được ship
 func (api *apiController) shipShopOrder() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		authPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
-		shopOrderCode := ctx.Param("shopOrderCode")
+		// 	_ = ctx.MustGet(authorizationPayload).(*token.Payload)
+		// 	shopOrderCode := ctx.Param("shopOrderCode")
 
-		if shopOrderCode == "" {
-			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Shop order code is required"))
-			return
-		}
+		// 	if shopOrderCode == "" {
+		// 		ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Shop order code is required"))
+		// 		return
+		// 	}
 
-		var req services.ShipOrderRequest
-		if err := ctx.ShouldBindJSON(&req); err != nil {
-			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Invalid request body: "+err.Error()))
-			return
-		}
+		// 	// var req services.ShipOrderRequest
+		// 	// if err := ctx.ShouldBindJSON(&req); err != nil {
+		// 	// 	ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Invalid request body: "+err.Error()))
+		// 	// 	return
+		// 	// }
 
-		// Giả định shopID lấy từ token
-		shopID := ctx.Query("shop_id")
-		if shopID == "" {
-			shopID = authPayload.Sub
-		}
+		// 	// Giả định shopID lấy từ token
+		// 	shopID := ctx.Query("shop_id")
+		// 	if shopID == "" {
+		// 		ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "shop_id query parameter is required"))
+		// 		return
+		// 	}
 
-		err := api.service.ShipShopOrder(ctx, shopID, shopOrderCode, req)
-		if err != nil {
-			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
-			return
-		}
+		// 	err := api.service.ShipShopOrder(ctx, shopID, shopOrderCode)
+		// 	if err != nil {
+		// 		ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
+		// 		return
+		// 	}
 
-		ctx.JSON(http.StatusOK, assets_api.SimpSuccessResponse("Order marked as shipped successfully", nil))
+		// 	ctx.JSON(http.StatusOK, assets_api.SimpSuccessResponse("Order marked as shipped successfully", nil))
 	}
 }
 
 // updateShopOrderStatus cập nhật trạng thái đơn hàng của shop
 func (api *apiController) updateShopOrderStatus() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		// authPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
-		// shopOrderCode := ctx.Param("shopOrderCode")
-
-		// if shopOrderCode == "" {
-		// 	ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Shop order code is required"))
-		// 	return
-		// }
+		authPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
 
 		var req struct {
 			Status      string `json:"status" binding:"required"`
 			ShopOrderID string `json:"shop_order_id" binding:"required"`
+			Reason      string `json:"reason"`
 		}
 		if err := ctx.ShouldBindJSON(&req); err != nil {
 			ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "Invalid request body: "+err.Error()))
 			return
 		}
-
-		err := api.service.UpdateShopOrderStatus(ctx, req.ShopOrderID, req.Status)
+		if authPayload.Scope == "ROLE_SELLER" {
+			shopID := ctx.Query("shop_id")
+			if shopID == "" {
+				ctx.JSON(http.StatusBadRequest, assets_api.ResponseError(http.StatusBadRequest, "shop_id query parameter is required"))
+				return
+			}
+			authPayload.Sub = shopID
+		}
+		err := api.service.UpdateShopOrderStatus(ctx, authPayload.Sub, authPayload.Scope, req.ShopOrderID, req.Status, req.Reason)
 		if err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return

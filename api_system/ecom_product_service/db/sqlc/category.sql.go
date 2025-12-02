@@ -33,7 +33,7 @@ type CreateCategoryParams struct {
 	CategoryID string         `json:"category_id"`
 	Name       string         `json:"name"`
 	Key        string         `json:"key"`
-	Path       string         `json:"path"`
+	Path       sql.NullString `json:"path"`
 	Parent     sql.NullString `json:"parent"`
 	Image      sql.NullString `json:"image"`
 }
@@ -67,6 +67,25 @@ WHERE category_id = ? LIMIT 1
 
 func (q *Queries) GetCategory(ctx context.Context, categoryID string) (Category, error) {
 	row := q.db.QueryRowContext(ctx, getCategory, categoryID)
+	var i Category
+	err := row.Scan(
+		&i.CategoryID,
+		&i.Name,
+		&i.Key,
+		&i.Path,
+		&i.Parent,
+		&i.Image,
+	)
+	return i, err
+}
+
+const getCategoryByPath = `-- name: GetCategoryByPath :one
+SELECT category_id, name, ` + "`" + `key` + "`" + `, path, parent, image FROM category
+WHERE path = ? LIMIT 1
+`
+
+func (q *Queries) GetCategoryByPath(ctx context.Context, path sql.NullString) (Category, error) {
+	row := q.db.QueryRowContext(ctx, getCategoryByPath, path)
 	var i Category
 	err := row.Scan(
 		&i.CategoryID,

@@ -6,13 +6,30 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
 	// Cập nhật trạng thái một loạt shop_orders thành CANCELLED
 	CancelShopOrdersByIDs(ctx context.Context, arg CancelShopOrdersByIDsParams) error
+	// Kiểm tra danh sách order_item_id đã được review chưa
+	// Chỉ trả về những order_item_id đã có bình luận
+	CheckBulkOrderItemsReviewed(ctx context.Context, orderItemIds []string) ([]string, error)
+	// Xác thực quyền review:
+	// 1. order_item_id có tồn tại (JOIN order_items)
+	// 2. order_item_id đó có thuộc về user_id này (WHERE o.user_id = ?)
+	// 3. Đơn hàng shop (shop_order) chứa item đó PHẢI ở trạng thái 'COMPLETED' (WHERE so.status = 'COMPLETED')
+	CheckReviewPermission(ctx context.Context, arg CheckReviewPermissionParams) (CheckReviewPermissionRow, error)
+	// Đếm số lượt "Hữu ích" của một review
+	CountReviewLikes(ctx context.Context, reviewID string) (int64, error)
 	// Đếm số lần user đã sử dụng 1 voucher (cho check max_usage_per_user)
 	CountVoucherUsageByUser(ctx context.Context, arg CountVoucherUsageByUserParams) (int64, error)
+	// =============================================
+	// CÁC HÀM QUẢN LÝ CHO ADMIN/SELLER
+	// =============================================
+	// Đếm tổng số voucher theo owner với filters
+	CountVouchersForManagement(ctx context.Context, arg CountVouchersForManagementParams) (int64, error)
+	CreateComment(ctx context.Context, arg CreateCommentParams) error
 	// =================================================================
 	// Queries for `orders` table
 	// =================================================================
@@ -21,6 +38,8 @@ type Querier interface {
 	// Queries for `order_items` table
 	// =================================================================
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error
+	// Thêm một lượt "Hữu ích" cho review
+	CreateReviewLike(ctx context.Context, arg CreateReviewLikeParams) error
 	// =================================================================
 	// Queries for `shop_orders` table
 	// =================================================================
@@ -28,8 +47,12 @@ type Querier interface {
 	CreateVoucher(ctx context.Context, arg CreateVoucherParams) error
 	// Ghi lại lịch sử sử dụng voucher
 	CreateVoucherUsageHistory(ctx context.Context, arg CreateVoucherUsageHistoryParams) error
+	// tạo ra voucher cho riêng người dùng
+	CreateVoucherUser(ctx context.Context, arg CreateVoucherUserParams) error
 	// Giảm số lượng đã dùng (khi hủy đơn)
 	DecrementVoucherUsage(ctx context.Context, id string) (int64, error)
+	// Bỏ lượt "Hữu ích"
+	DeleteReviewLike(ctx context.Context, arg DeleteReviewLikeParams) error
 	// Xóa 1 dòng lịch sử cụ thể (khi hủy đơn)
 	DeleteVoucherUsageHistory(ctx context.Context, id uint64) (int64, error)
 	// Lấy danh sách voucher ĐƯỢC GÁN RIÊNG (cho 1 user)
@@ -37,6 +60,11 @@ type Querier interface {
 	GetAssignedVouchersByUser(ctx context.Context, userID string) ([]Vouchers, error)
 	// Lấy danh sách voucher ĐƯỢC GÁN RIÊNG với bộ lọc
 	GetAssignedVouchersByUserWithFilter(ctx context.Context, arg GetAssignedVouchersByUserWithFilterParams) ([]Vouchers, error)
+	// Lấy điểm đánh giá trung bình và tổng số lượt đánh giá cho nhiều sản phẩm
+	// Chỉ tính các bình luận gốc (parent_id IS NULL).
+	GetBulkProductRatingStats(ctx context.Context, productIds []string) ([]GetBulkProductRatingStatsRow, error)
+	// Dùng để check xem order_item_id này đã được review hay chưa.
+	GetCommentByOrderItemID(ctx context.Context, orderItemID string) (ProductComment, error)
 	GetOrderByCode(ctx context.Context, orderCode string) (Orders, error)
 	GetOrderByID(ctx context.Context, id string) (Orders, error)
 	// -- =================================================================
@@ -54,11 +82,19 @@ type Querier interface {
 	// ORDER BY created_at ASC;
 	// Lấy tất cả items thuộc các shop_orders (để gửi event 'order_cancelled' cho Product Service)
 	GetOrderItemsByShopOrderIDs(ctx context.Context, shopOrderIds []string) ([]GetOrderItemsByShopOrderIDsRow, error)
+	// Lấy điểm đánh giá trung bình và tổng số lượt đánh giá cho một sản phẩm.
+	// Chỉ tính các bình luận gốc (parent_id IS NULL).
+	GetProductRatingStats(ctx context.Context, productID string) (GetProductRatingStatsRow, error)
+	//
+	// lấy tổng số lượng đã bán của các product_ids trong các đơn hàng có trạng thái 'PROCESSING', 'SHIPPED', 'COMPLETED'(đang dùng cho product_service)
+	GetProductTotalSold(ctx context.Context, productIds []string) ([]GetProductTotalSoldRow, error)
 	// Lấy danh sách voucher CÔNG KHAI (cho toàn bộ người dùng)
 	// Chỉ lấy voucher còn hiệu lực và còn số lượng
 	GetPublicVouchers(ctx context.Context) ([]Vouchers, error)
 	// Lấy danh sách voucher CÔNG KHAI với bộ lọc
 	GetPublicVouchersWithFilter(ctx context.Context, arg GetPublicVouchersWithFilterParams) ([]Vouchers, error)
+	// Lấy danh sách các bình luận trả lời (replies) cho một comment gốc
+	GetRepliesByCommentID(ctx context.Context, parentID sql.NullString) ([]ProductComment, error)
 	GetShopOrderByID(ctx context.Context, id string) (ShopOrders, error)
 	// Lấy trạng thái voucher trong ví của user (cho check voucher ĐƯỢC GÁN)
 	GetUserVoucherStatus(ctx context.Context, arg GetUserVoucherStatusParams) (UserVouchers, error)
@@ -81,6 +117,8 @@ type Querier interface {
 	// Tăng số lượng đã dùng. Dùng :execrows để check race condition
 	// (Logic code phải kiểm tra RowsAffected() == 1)
 	IncrementVoucherUsage(ctx context.Context, id string) (int64, error)
+	// Lấy danh sách bình luận (gốc, không phải trả lời) cho một sản phẩm, hỗ trợ phân trang.
+	ListCommentsByProduct(ctx context.Context, arg ListCommentsByProductParams) ([]ProductComment, error)
 	ListOrderItemsByShopOrderID(ctx context.Context, shopOrderID string) ([]OrderItems, error)
 	ListOrdersByUserID(ctx context.Context, userID string) ([]Orders, error)
 	ListOrdersByUserIDPaged(ctx context.Context, arg ListOrdersByUserIDPagedParams) ([]Orders, error)
@@ -97,6 +135,15 @@ type Querier interface {
 	ListShopOrdersByStatus(ctx context.Context, arg ListShopOrdersByStatusParams) ([]ShopOrders, error)
 	//
 	ListShopOrdersByStatusCount(ctx context.Context, arg ListShopOrdersByStatusCountParams) (int64, error)
+	ListShopOrdersSHOP(ctx context.Context, arg ListShopOrdersSHOPParams) ([]ShopOrders, error)
+	ListShopOrdersSHOPCount(ctx context.Context, arg ListShopOrdersSHOPCountParams) (int64, error)
+	ListVouchersForManagementBySortCreatedAtAsc(ctx context.Context, arg ListVouchersForManagementBySortCreatedAtAscParams) ([]Vouchers, error)
+	// Lấy danh sách voucher cho admin/seller - Sắp xếp theo created_at DESC
+	ListVouchersForManagementBySortCreatedAtDesc(ctx context.Context, arg ListVouchersForManagementBySortCreatedAtDescParams) ([]Vouchers, error)
+	ListVouchersForManagementBySortEndDateAsc(ctx context.Context, arg ListVouchersForManagementBySortEndDateAscParams) ([]Vouchers, error)
+	ListVouchersForManagementBySortEndDateDesc(ctx context.Context, arg ListVouchersForManagementBySortEndDateDescParams) ([]Vouchers, error)
+	ListVouchersForManagementBySortStartDateAsc(ctx context.Context, arg ListVouchersForManagementBySortStartDateAscParams) ([]Vouchers, error)
+	ListVouchersForManagementBySortStartDateDesc(ctx context.Context, arg ListVouchersForManagementBySortStartDateDescParams) ([]Vouchers, error)
 	// Xóa bằng ID của bảng history
 	// Reset trạng thái ví voucher (từ USED về AVAILABLE)
 	ResetUserVoucherStatus(ctx context.Context, arg ResetUserVoucherStatusParams) (int64, error)

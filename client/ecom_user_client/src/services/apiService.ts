@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import apiClient from "@/lib/apiClient";
 import apiOrderClient from "@/lib/apiOrderService";
+import apiCartClient from "@/lib/apiCartService";
+import { cookies } from "@/assets/helpers";
+import { ACCESS_TOKEN } from "@/assets/configs/request";
 import { 
   ProductListParams, 
   PaginatedProductsResponse, 
@@ -16,6 +19,16 @@ import {
   OrderDetailResponse
 } from "@/types/order.types";
 import { VoucherApiResponse } from "@/types/voucher.types";
+import { BannerType, BannerApiResponse } from "@/types/shop.types";
+import API from "@/assets/configs/api";
+import { 
+  ApiCartResponse, 
+  ApiCartCountResponse, 
+  AddToCartPayload, 
+  UpdateCartItemPayload 
+} from "@/types/cart.types";
+import { CollectionType } from "@/types/collection.types";
+import { custom } from "zod";
 
 // ================ CATEGORIES ================
 
@@ -28,7 +41,7 @@ export const useGetCategories = () => {
     queryKey: ['categories'],
     queryFn: async () => {
       const response = await apiClient.get<CategoryApiResponse>('/categories/get',{
-                customBaseURL:process.env.NEXT_PUBLIC_API_GATEWAY_URL
+                customBaseURL:API.base_product
       });
       return response.data.result.categories;
     },
@@ -62,7 +75,7 @@ export const useGetProducts = (params: ProductListParams) => {
 
       const response = await apiClient.get<PaginatedProductsResponse>('/product/getall', {
         params: cleanParams,
-        customBaseURL:process.env.NEXT_PUBLIC_API_GATEWAY_URL
+        customBaseURL:API.base_product
 
       },);
       return response.data.result;
@@ -107,7 +120,7 @@ export const useCreateOrder = () => {
 
 /**
  * Hook để lấy danh sách đơn hàng
- * GET /orders
+ * GET /orders/search/detail
  */
 export const useGetOrders = (params: OrderListParams) => {
   return useQuery<OrderListResponse['result'], Error>({
@@ -115,12 +128,12 @@ export const useGetOrders = (params: OrderListParams) => {
     queryFn: async () => {
       const cleanParams: Record<string, any> = {
         page: params.page || 1,
-        limit: params.limit || 10,
+        page_size: params.limit || 10,
       };
 
       if (params.status) cleanParams.status = params.status;
 
-      const response = await apiOrderClient.get<OrderListResponse>('/orders', {
+      const response = await apiOrderClient.get<OrderListResponse>('/orders/search/detail', {
         params: cleanParams,
       });
       return response.data.result;
@@ -131,7 +144,7 @@ export const useGetOrders = (params: OrderListParams) => {
 
 /**
  * Hook để lấy danh sách đơn hàng với infinite scroll
- * GET /orders
+ * GET /orders/search/detail
  */
 export const useGetOrdersInfinite = (params: Omit<OrderListParams, 'page'>) => {
   return useInfiniteQuery<OrderListResponse['result'], Error>({
@@ -139,12 +152,12 @@ export const useGetOrdersInfinite = (params: Omit<OrderListParams, 'page'>) => {
     queryFn: async ({ pageParam = 1 }) => {
       const cleanParams: Record<string, any> = {
         page: pageParam,
-        limit: params.limit || 10,
+        page_size: params.limit || 10,
       };
 
       if (params.status) cleanParams.status = params.status;
 
-      const response = await apiOrderClient.get<OrderListResponse>('/orders', {
+      const response = await apiOrderClient.get<OrderListResponse>('/orders/search/detail', {
         params: cleanParams,
       });
       return response.data.result;
@@ -193,3 +206,198 @@ export const useGetVouchers = () => {
     staleTime: 1000 * 60 * 5, // Cache 5 phút
   });
 };
+
+// ================ CART ================
+
+/**
+ * Hook để lấy giỏ hàng của người dùng đã đăng nhập
+ * GET /Cart
+ * Nếu không có token (chưa đăng nhập), sẽ skip API call
+ */
+export const useGetCart = () => {
+  // Kiểm tra token trước khi gọi API
+  const hasToken = () => {
+    if (typeof window === 'undefined') return false;
+    return !!cookies.getCookieValues<string>(ACCESS_TOKEN);
+  };
+  
+  return useQuery<ApiCartResponse['result'], Error>({
+    queryKey: ['cart'],
+    queryFn: async () => {
+      const response = await apiCartClient.get<ApiCartResponse>(API.cart.getCart);
+      return response.data.result;
+    },
+    enabled: hasToken(), // Chỉ gọi API nếu có token
+    staleTime: 0, // Không cache, luôn lấy dữ liệu mới
+    retry: false, // Không retry nếu lỗi
+  });
+};
+
+/**
+ * Hook để lấy số lượng sản phẩm trong giỏ hàng
+ * GET /Cart/count
+ * Nếu không có token, sẽ skip API call
+ */
+export const useGetCartCount = () => {
+  // Kiểm tra token trước khi gọi API
+  const hasToken = () => {
+    if (typeof window === 'undefined') return false;
+    return !!cookies.getCookieValues<string>(ACCESS_TOKEN);
+  };
+  
+  return useQuery<number, Error>({
+    queryKey: ['cart-count'],
+    queryFn: async () => {
+      const response = await apiCartClient.get<ApiCartCountResponse>(API.cart.getCount);
+      return response.data.result;
+    },
+    enabled: hasToken(), // Chỉ gọi API nếu có token
+    // staleTime: 1000 * 30, // Cache 30 giây
+    retry: false,
+  });
+};
+
+/**
+ * Hook để thêm sản phẩm vào giỏ hàng
+ * POST /Cart/items
+ */
+export const useAddToCart = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<ApiCartResponse['result'], Error, AddToCartPayload>({
+    mutationFn: async (payload: AddToCartPayload) => {
+      const response = await apiCartClient.post<ApiCartResponse>(API.cart.addItem, payload);
+      return response.data.result;
+    },
+    onSuccess: () => {
+      // Invalidate cart queries để refetch
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+    },
+  });
+};
+
+/**
+ * Hook để cập nhật số lượng sản phẩm trong giỏ
+ * PUT /Cart/items/{skuId}
+ */
+export const useUpdateCartItem = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<ApiCartResponse['result'], Error, { skuId: string; payload: UpdateCartItemPayload }>({
+    mutationFn: async ({ skuId, payload }) => {
+      const response = await apiCartClient.put<ApiCartResponse>(
+        `${API.cart.updateItem}/${skuId}`, 
+        payload
+      );
+      return response.data.result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+    },
+  });
+};
+
+/**
+ * Hook để xóa sản phẩm khỏi giỏ hàng
+ * DELETE /Cart/items/{skuId}
+ */
+export const useDeleteCartItem = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<ApiCartResponse['result'], Error, string>({
+    mutationFn: async (skuId: string) => {
+      const response = await apiCartClient.delete<ApiCartResponse>(
+        `${API.cart.deleteItem}/${skuId}`
+      );
+      return response.data.result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+    },
+  });
+};
+
+/**
+ * Hook để xóa toàn bộ giỏ hàng
+ * DELETE /Cart
+ */
+export const useClearCart = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<ApiCartResponse['result'], Error, void>({
+    mutationFn: async () => {
+      const response = await apiCartClient.delete<ApiCartResponse>(API.cart.clearCart);
+      return response.data.result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+    },
+  });
+};
+
+// ================ BANNERS ================
+
+/**
+ * Hook để lấy danh sách banners theo loại
+ * GET /Banners/active
+ */
+export const useGetActiveBanners = (bannerType?: BannerType,shop_id?: string) => {
+  return useQuery<BannerApiResponse['result'], Error>({
+    queryKey: ['banners', bannerType],
+    queryFn: async () => {
+      const params: Record<string, any> = {};
+      if (bannerType) params.bannerType = bannerType;
+      if (shop_id) params.shopId = shop_id;
+
+      const response = await apiClient.get<BannerApiResponse>('/Banners/active', {
+        params,
+        customBaseURL: 'http://localhost:8000/api'
+      });
+      return response.data.result;
+    },
+    staleTime: 1000 * 60 * 5, // Cache 5 phút
+  });
+};
+
+// ================ COLLECTION ================
+
+/**
+ * Hook để thu thập dữ liệu
+ * GET /Banners/active
+ */
+export const useCollectData = () => {
+  return useMutation<ApiCartResponse['result'], Error, CollectionType>({
+    mutationFn: async (payload: CollectionType) => {
+      const response = await apiClient.post<ApiCartResponse>(API.AI_CHUONG.collection, payload,
+        {
+          customBaseURL: 'http://localhost:5000/api'
+        }
+      );
+      return response.data.result;
+    },
+    // onSuccess: () => {
+
+    // },
+  });
+
+};
+
+// export const useAddToCart = () => {
+//   const queryClient = useQueryClient();
+  
+//   return useMutation<ApiCartResponse['result'], Error, AddToCartPayload>({
+//     mutationFn: async (payload: AddToCartPayload) => {
+//       const response = await apiCartClient.post<ApiCartResponse>(API.cart.addItem, payload);
+//       return response.data.result;
+//     },
+//     onSuccess: () => {
+//       // Invalidate cart queries để refetch
+//       queryClient.invalidateQueries({ queryKey: ['cart'] });
+//       queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+//     },
+//   });
+// };

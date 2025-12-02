@@ -80,3 +80,23 @@ type FeedbackUseCase interface {
 	GetCustomerFeedbackStats(ctx context.Context, startDate, endDate *string) (*entity.CustomerFeedbackStatsResponse, *assets_services.ServiceError)
 	GetCustomerFeedbacksByCategory(ctx context.Context, startDate, endDate *string) ([]entity.CustomerFeedbackCategoryStats, *assets_services.ServiceError)
 }
+
+type AgentAnalyticsUseCase interface {
+	// Dashboard Stats
+	GetDashboardStats(ctx context.Context, startDate, endDate *string) (*entity.DashboardStatsResponse, *assets_services.ServiceError)
+
+	// Message Volume By Hour
+	GetMessageVolumeByHour(ctx context.Context, startDate, endDate *string) ([]entity.MessageVolumeByHourItem, *assets_services.ServiceError)
+
+	// Top Active Users
+	GetTopActiveUsers(ctx context.Context, req *entity.GetTopActiveUsersRequest) ([]entity.TopActiveUserItem, *assets_services.ServiceError)
+
+	// Topic Stats
+	GetTopicStats(ctx context.Context, startDate, endDate *string) ([]entity.TopicStatsItem, *assets_services.ServiceError)
+
+	// Purchase Intent Stats
+	GetPurchaseIntentStats(ctx context.Context, startDate, endDate *string) ([]entity.PurchaseIntentStatsItem, *assets_services.ServiceError)
+
+	// Top Mentioned Categories
+	GetTopMentionedCategories(ctx context.Context, req *entity.GetTopMentionedCategoriesRequest) ([]entity.CategoryMentionItem, *assets_services.ServiceError)
+}

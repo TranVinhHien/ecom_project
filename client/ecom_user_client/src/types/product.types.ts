@@ -12,6 +12,7 @@ export interface ProductSummary {
   min_price_sku_id: string;
   max_price_sku_id: string;
   description: string;
+  total_sold: number;
   short_description: string;
   media: string | null;
   product_is_permission_check: boolean;
@@ -19,6 +20,11 @@ export interface ProductSummary {
   delete_status: string;
   create_date: string;
   update_date: string;
+  rating:{
+product_id:string;
+total_reviews:number;
+average_rating:number;
+  };
 }
 
 export interface PaginatedProductsResponse {
@@ -125,5 +131,5 @@ export interface ProductListParams {
   shop_id?: string;
   price_min?: number;
   price_max?: number;
-  sort?: 'price_asc' | 'price_desc' | 'newest' | 'popular';
+  sort?: "price_asc" | "price_desc" | "name_asc" | "name_desc" | "best_sell";
 }

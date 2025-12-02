@@ -27,6 +27,11 @@ import {
   CategorizedVouchers,
   ShopGroup 
 } from "@/types/voucher.types";
+import { 
+  CreateOrderPayload, 
+  ShippingAddress, 
+  VoucherShopRequest 
+} from "@/types/order.types";
 import { UserAddress } from "@/types/address.types";
 import { getCookieValues } from "@/assets/helpers/cookies";
 import { ACCESS_TOKEN, INFO_USER } from "@/assets/configs/request";
@@ -59,6 +64,7 @@ export default function CheckoutPage() {
 
   // Local state for checkout items (avoid Zustand hydration issues)
   const [checkoutItems, setCheckoutItems] = useState<CheckoutItem[]>([]);
+  const [isFromCart, setIsFromCart] = useState<boolean>(false); // Track nguồn gốc checkout
   const [selectedPayment, setSelectedPayment] = useState<string>(PAYMENT_METHODS.COD);
   const [orderNote, setOrderNote] = useState<string>("");
   const [isMounted, setIsMounted] = useState<boolean>(false);
@@ -168,7 +174,19 @@ export default function CheckoutPage() {
     
     // Read from Zustand store after mount
     const storeItems = useCheckoutStore.getState().items;
+    const storeIsFromCart = useCheckoutStore.getState().isFromCart;
+    
     setCheckoutItems(storeItems);
+    setIsFromCart(storeIsFromCart);
+
+    // ===== LOG SELECTED SKU_IDs FOR CHECKOUT =====
+    if (storeItems.length > 0) {
+      const skuIds = storeItems.map(item => item.sku_id);
+      console.log("🛒 CHECKOUT - Selected SKU IDs:", skuIds);
+      console.log("🛒 CHECKOUT - Full checkout items:", storeItems);
+      console.log("🛒 CHECKOUT - Is from cart:", storeIsFromCart ? "✅ TỪ GIỎ HÀNG (sẽ xóa sau khi thanh toán)" : "❌ MUA NGAY (không xóa)");
+    }
+    // ============================================
 
     // Redirect if empty
     if (storeItems.length === 0) {
@@ -279,10 +297,14 @@ export default function CheckoutPage() {
 
   // Calculate discount
   const calculateVoucherDiscount = (voucher: Voucher, amount: number): number => {
-    const minAmount = parseFloat(voucher.min_purchase_amount);
-    if (amount < minAmount) return 0;
+    // Validate inputs
+    if (!voucher || !amount || isNaN(amount)) return 0;
+    
+    const minAmount = parseFloat(voucher.min_purchase_amount || '0');
+    if (isNaN(minAmount) || amount < minAmount) return 0;
 
-    const discountValue = parseFloat(voucher.discount_value);
+    const discountValue = parseFloat(voucher.discount_value || '0');
+    if (isNaN(discountValue)) return 0;
     
     if (voucher.discount_type === "FIXED_AMOUNT") {
       return discountValue;
@@ -291,7 +313,9 @@ export default function CheckoutPage() {
       let discount = (amount * discountValue) / 100;
       if (voucher.max_discount_amount) {
         const maxDiscount = parseFloat(voucher.max_discount_amount);
-        discount = Math.min(discount, maxDiscount);
+        if (!isNaN(maxDiscount)) {
+          discount = Math.min(discount, maxDiscount);
+        }
       }
       return discount;
     }
@@ -311,7 +335,8 @@ export default function CheckoutPage() {
     if (!appliedPlatformOrderVoucher) return 0;
     const voucher = vouchersData?.data.find(v => v.id === appliedPlatformOrderVoucher.voucher_id);
     if (!voucher) return 0;
-    return calculateVoucherDiscount(voucher, orderSubtotal);
+    const discount = calculateVoucherDiscount(voucher, orderSubtotal);
+    return isNaN(discount) ? 0 : discount;
   }, [appliedPlatformOrderVoucher, vouchersData, orderSubtotal]);
 
   // Platform shipping voucher discount
@@ -319,7 +344,8 @@ export default function CheckoutPage() {
     if (!appliedPlatformShippingVoucher) return 0;
     const voucher = vouchersData?.data.find(v => v.id === appliedPlatformShippingVoucher.voucher_id);
     if (!voucher) return 0;
-    return Math.min(calculateVoucherDiscount(voucher, orderSubtotal), totalShippingFee);
+    const discount = Math.min(calculateVoucherDiscount(voucher, orderSubtotal), totalShippingFee);
+    return isNaN(discount) ? 0 : discount;
   }, [appliedPlatformShippingVoucher, vouchersData, orderSubtotal, totalShippingFee]);
 
   // Shop vouchers discount
@@ -329,14 +355,17 @@ export default function CheckoutPage() {
       const voucher = vouchersData?.data.find(v => v.id === appliedVoucher.voucher_id);
       const shopGroup = shopGroups.find(g => g.shop_id === shop_id);
       if (voucher && shopGroup) {
-        total += calculateVoucherDiscount(voucher, shopGroup.subtotal);
+        const discount = calculateVoucherDiscount(voucher, shopGroup.subtotal);
+        if (!isNaN(discount)) {
+          total += discount;
+        }
       }
     });
-    return total;
+    return isNaN(total) ? 0 : total;
   }, [appliedShopVouchers, vouchersData, shopGroups]);
 
-  const totalDiscount = platformOrderDiscount + platformShippingDiscount + shopVouchersDiscount;
-  const grandTotal = orderSubtotal + totalShippingFee - totalDiscount;
+  const totalDiscount = (platformOrderDiscount || 0) + (platformShippingDiscount || 0) + (shopVouchersDiscount || 0);
+  const grandTotal = (orderSubtotal || 0) + (totalShippingFee || 0) - (totalDiscount || 0);
 
   // Voucher handlers
   const handleApplyPlatformOrderVoucher = (voucher: Voucher | null) => {
@@ -414,17 +443,8 @@ export default function CheckoutPage() {
       });
       return;
     }
-    // Prepare voucher_shop array (shop vouchers)
-    const voucher_shop: Array<{ voucher_id: string; shop_id: string }> = [];
-    appliedShopVouchers.forEach((voucher, shop_id) => {
-      voucher_shop.push({
-        voucher_id: voucher.voucher_id,
-        shop_id: shop_id,
-      });
-    });
-
     // Prepare shipping address from selected address
-    const shippingAddressData = {
+    const shippingAddressData: ShippingAddress = {
       fullName: selectedAddress.name,
       phone: selectedAddress.phoneNumber,
       address: selectedAddress.address.other,
@@ -434,10 +454,11 @@ export default function CheckoutPage() {
       wardId: selectedAddress.address.ward.id,
       districtId: selectedAddress.address.ward.district.id,
       provinceId: selectedAddress.address.ward.district.province.id,
+      postalCode: selectedAddress.address.id || "",
     };
 
-    // Prepare payload for API
-    const orderPayload: any = {
+    // Prepare payload for API - strictly typed
+    const orderPayload: CreateOrderPayload = {
       shippingAddress: shippingAddressData,
       paymentMethod: selectedPayment,
       items: checkoutItems.map(item => ({
@@ -445,22 +466,36 @@ export default function CheckoutPage() {
         shop_id: item.shop_id,
         quantity: item.quantity,
       })),
-      note: orderNote || "",
+      note: orderNote || undefined,
     };
 
-    // Add vouchers if applied
-    if (voucher_shop.length > 0) {
+    // Add voucher_shop if applied
+    if (appliedShopVouchers.size > 0) {
+      const voucher_shop: VoucherShopRequest[] = [];
+      appliedShopVouchers.forEach((voucher, shop_id) => {
+        voucher_shop.push({
+          voucher_id: voucher.voucher_id,
+          shop_id: shop_id,
+        });
+      });
       orderPayload.voucher_shop = voucher_shop;
     }
 
+    // Add voucher_site_id if applied
     if (appliedPlatformOrderVoucher) {
       orderPayload.voucher_site_id = appliedPlatformOrderVoucher.voucher_id;
     }
 
+    // Add voucher_shipping_id if applied
     if (appliedPlatformShippingVoucher) {
       orderPayload.voucher_shipping_id = appliedPlatformShippingVoucher.voucher_id;
     }
-    // orderPayload.email = "vinhhien12z@gmail.com"
+
+    // Add sku_in_cart if checkout from cart
+    if (isFromCart && checkoutItems.length > 0) {
+      orderPayload.sku_in_cart = checkoutItems.map(item => item.sku_id);
+    }
+
     console.log("Order Payload:", orderPayload);
 
     // Submit order
@@ -471,8 +506,15 @@ export default function CheckoutPage() {
           description: `Mã đơn hàng: ${response.result?.orderCode  || 'N/A'} - Tổng tiền: ${formatPrice(response.result?.grandTotal || 0)}`,
         });
 
-        // Clear cart and checkout
-        clearCart();
+        // ✅ CHỈ XÓA GIỎ HÀNG NẾU CHECKOUT TỪ GIỎ HÀNG
+        if (isFromCart) {
+          console.log("🗑️ Xóa items khỏi giỏ hàng (vì checkout từ giỏ hàng)");
+          clearCart();
+        } else {
+          console.log("ℹ️ Không xóa giỏ hàng (vì mua ngay từ trang chi tiết)");
+        }
+        
+        // Luôn luôn clear checkout store
         clearCheckout();
         
         // Redirect based on payment method

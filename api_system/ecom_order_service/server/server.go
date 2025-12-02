@@ -16,6 +16,7 @@ type apiClient struct {
 	media       server_media.MediaServer
 	product     server_product.ProductServer
 	transaction server_transaction.TransactionServer
+	// cart        server_product.CartServer
 }
 
 type ApiServer interface {

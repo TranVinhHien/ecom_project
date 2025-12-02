@@ -117,3 +117,13 @@ func (s *service) HandlePaymentSucceededEvent(ctx context.Context, body services
 	log.Printf("Successfully update %d shop orders for main order %s", len(shopOrderID), body.OrderID)
 	return nil
 }
+
+// sử lý khi phía admin xác nhận đã hoàn thành đơn hàng . đây sẽ là 1 API gọi từ phía seller gọi tới đây rồi sẽ gọi tới phía vận chuyển để gửi tin nhắn cho nó giao
+func (s *service) HandleOrderDeliveredEvent(ctx context.Context, body interface{}) error {
+	return nil
+}
+
+// sử lý khi phía vận chuyển xác nhận đã giao hàng thì sẽ cập nhật ở hàm này. Hàm này sẽ bắt đầu cộng riêng ra chứ không cộng ở trong kia.
+func (s *service) HandleOrderReceivedEvent(ctx context.Context, body interface{}) error {
+	return nil
+}

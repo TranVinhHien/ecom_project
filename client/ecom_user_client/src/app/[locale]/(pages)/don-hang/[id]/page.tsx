@@ -121,7 +121,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
     const statusMap: Record<string, string> = {
       'AWAITING_PAYMENT': 'Chờ thanh toán',
       'PROCESSING': 'Đang xử lý',
-      'SHIPPED': 'Đã giao hàng',
+      'SHIPPED': 'Đang giao hàng',
       'COMPLETED': 'Hoàn thành',
       'CANCELED': 'Đã hủy',
       'REFUNDED': 'Hoàn tiền',
@@ -243,14 +243,14 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                 <div className={`h-full ${order_shop.shipped_at ? 'bg-green-500' : 'bg-gray-200'}`} />
               </div>
 
-              {/* Đã giao */}
+              {/* Đang giao */}
               <div className="flex flex-col items-center flex-1">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                   order_shop.shipped_at ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
                 }`}>
                   <Truck className="h-6 w-6" />
                 </div>
-                <p className="text-xs mt-2 text-center font-medium">Đã Giao Hàng</p>
+                <p className="text-xs mt-2 text-center font-medium">Đang giao Hàng</p>
                 <p className="text-xs text-gray-500">{formatDate(order_shop.shipped_at)}</p>
               </div>
 
@@ -383,38 +383,91 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
               <CardTitle>Tổng quan đơn hàng</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Subtotal */}
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Tạm tính:</span>
+                <span className="text-gray-600">Tổng tiền hàng:</span>
                 <span className="font-medium">{formatPrice(order_shop.subtotal)}</span>
               </div>
               
+              {/* Shipping Fee */}
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Phí vận chuyển:</span>
                 <span className="font-medium">{formatPrice(order_shop.shipping_fee)}</span>
               </div>
 
-              {order_shop.total_discount > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Giảm giá:</span>
-                  <span className="font-medium text-red-600">-{formatPrice(order_shop.total_discount)}</span>
+              {/* Vouchers Section */}
+              {(order_shop.shop_voucher_discount > 0 || order_shop.site_order_discount > 0 || order_shop.site_shipping_discount > 0) && (
+                <div className="border-t border-b py-3 space-y-2">
+                  <p className="text-xs font-semibold text-gray-700 uppercase mb-2">Mã giảm giá</p>
+                  
+                  {/* Shop Voucher */}
+                  {order_shop.shop_voucher_discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <div className="flex flex-col">
+                        <span className="text-gray-600">Voucher Shop</span>
+                        {order.site_order_voucher_code && (
+                          <span className="text-xs text-green-600 font-medium">({order.site_order_voucher_code})</span>
+                        )}
+                      </div>
+                      <span className="font-medium text-green-600">-{formatPrice(order_shop.shop_voucher_discount)}</span>
+                    </div>
+                  )}
+
+                  {/* Site Order Voucher */}
+                  {order_shop.site_order_discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <div className="flex flex-col">
+                        <span className="text-gray-600">Voucher Sàn (Đơn hàng)</span>
+                        {order.site_order_voucher_code && (
+                          <span className="text-xs text-green-600 font-medium">({order.site_order_voucher_code})</span>
+                        )}
+                      </div>
+                      <span className="font-medium text-green-600">-{formatPrice(order_shop.site_order_discount)}</span>
+                    </div>
+                  )}
+
+                  {/* Site Shipping Voucher */}
+                  {order_shop.site_shipping_discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <div className="flex flex-col">
+                        <span className="text-gray-600">Voucher Sàn (Vận chuyển)</span>
+                        {order.site_shipping_voucher_code && (
+                          <span className="text-xs text-green-600 font-medium">({order.site_shipping_voucher_code})</span>
+                        )}
+                      </div>
+                      <span className="font-medium text-green-600">-{formatPrice(order_shop.site_shipping_discount)}</span>
+                    </div>
+                  )}
+
+                  {/* Total Discount */}
+                  {order_shop.total_discount > 0 && (
+                    <div className="flex justify-between text-sm font-semibold pt-2 border-t">
+                      <span className="text-gray-700">Tổng giảm giá:</span>
+                      <span className="text-green-600">-{formatPrice(order_shop.total_discount)}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {order_shop.shop_voucher_discount > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Voucher shop:</span>
-                  <span className="font-medium text-red-600">-{formatPrice(order_shop.shop_voucher_discount)}</span>
-                </div>
-              )}
-
-              <div className="border-t pt-3">
+              {/* Grand Total */}
+              <div className="border-t-2 pt-3">
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-lg">Tổng cộng:</span>
                   <span className="font-bold text-2xl text-[hsl(var(--primary))]">
-                    {formatPrice(order_shop.total_amount)}
+                    {formatPrice(order_shop.total_amount-order_shop.total_discount)}
                   </span>
                 </div>
               </div>
+
+              {/* Grand Total from Order (if different) */}
+              {order.grand_total !== order_shop.total_amount && (
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-blue-700 font-medium">Tổng thanh toán (Tổng đơn):</span>
+                    <span className="font-bold text-blue-700">{formatPrice(order.grand_total)}</span>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -425,17 +478,35 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between">
+                <span className="text-gray-600">Mã đơn hàng:</span>
+                <span className="font-medium">{order.order_code}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-600">Mã đơn shop:</span>
                 <span className="font-medium">{order_shop.shop_order_code}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Shop ID:</span>
+                <span className="font-medium">{order_shop.shop_id}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Ngày đặt:</span>
                 <span className="font-medium">{formatDate(order.created_at)}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Cập nhật cuối:</span>
+                <span className="font-medium">{formatDate(order.updated_at)}</span>
+              </div>
               {order_shop.tracking_code && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Mã vận đơn:</span>
                   <span className="font-medium">{order_shop.tracking_code}</span>
+                </div>
+              )}
+              {order_shop.shipping_method && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Đơn vị vận chuyển:</span>
+                  <span className="font-medium">{order_shop.shipping_method}</span>
                 </div>
               )}
             </CardContent>

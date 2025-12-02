@@ -288,7 +288,7 @@ type OrderItems struct {
 	// Tổng tiền cho item này (final_unit_price * quantity)
 	TotalPrice string `json:"total_price"`
 	// Bản ghi nhanh các chương trình khuyến mãi đã áp dụng dạng JSON
-	PromotionsSnapshot json.RawMessage `json:"promotions_snapshot"`
+	PromotionsSnapshot sql.NullString `json:"promotions_snapshot"`
 	// Tên sản phẩm tại thời điểm mua
 	ProductNameSnapshot string `json:"product_name_snapshot"`
 	// URL hình ảnh sản phẩm tại thời điểm mua
@@ -331,6 +331,42 @@ type Orders struct {
 	CreatedAt time.Time `json:"created_at"`
 	// Thời gian cập nhật lần cuối
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Đánh giá sản phẩm (Chỉ dành cho người mua đã xác thực)
+type ProductComment struct {
+	// UUID, Khóa chính của đánh giá
+	CommentID string `json:"comment_id"`
+	// UUID của order_items.id từ Order Service. Đây là "vé" để review.
+	OrderItemID string `json:"order_item_id"`
+	// FK (logic) tới product.id. Dùng để tra cứu nhanh.
+	ProductID string `json:"product_id"`
+	// FK (logic) tới product_sku.id. Dùng để tra cứu nhanh.
+	SkuID string `json:"sku_id"`
+	// UUID của người dùng (từ Identity Service)
+	UserID string `json:"user_id"`
+	// Snapshot tên chi tiết SKU (ví dụ: "Màu Sắc: Đỏ, Size: L")
+	SkuNameSnapshot sql.NullString `json:"sku_name_snapshot"`
+	// Điểm đánh giá (1-5 sao)
+	Rating int8 `json:"rating"`
+	// Tiêu đề của đánh giá
+	Title sql.NullString `json:"title"`
+	// Nội dung chi tiết của đánh giá
+	Content sql.NullString `json:"content"`
+	// Mảng JSON chứa URLs hình ảnh/video
+	Media sql.NullString `json:"media"`
+	// FK tự tham chiếu (product_comment.id) cho phép Shop/Admin trả lời
+	ParentID  sql.NullString `json:"parent_id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+// Theo dõi lượt "Hữu ích" (Helpful) cho mỗi đánh giá
+type ReviewLikes struct {
+	// FK tới product_comment.id
+	ReviewID string `json:"review_id"`
+	// UUID của người dùng nhấn "Hữu ích"
+	UserID string `json:"user_id"`
 }
 
 // Bảng chứa các đơn hàng chi tiết của từng shop, là đơn vị vận hành chính

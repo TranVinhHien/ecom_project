@@ -180,6 +180,15 @@ func NormalizeSQLNulls(input interface{}, key string) map[string]interface{} {
 
 	return map[string]interface{}{key: result}
 }
+func NormalizeToInterface(input interface{}) interface{} {
+	if input == nil {
+		return nil
+	}
+
+	// Normalize the input using the recursive helper
+	normalized := normalizeValue(input)
+	return normalized
+}
 
 // HideFields ẩn các field được chỉ định từ đối tượng hoặc mảng/slice và trả về dưới dạng map với key được cung cấp
 func HideFields(obj interface{}, key string, fieldsToHide ...string) (map[string]interface{}, error) {
@@ -257,6 +266,30 @@ func SaveUploadedFile(fileHeader *multipart.FileHeader, destination string) erro
 	return nil
 }
 
+// func SaveFile(fileHeader *multipart.FileHeader, dstDir string) (*string, error) {
+// 	src, err := fileHeader.Open()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer src.Close()
+
+// 	// đảm bảo thư mục tồn tại
+// 	if err := os.MkdirAll(dstDir, os.ModePerm); err != nil {
+// 		return nil, err
+// 	}
+// 	file_name := fileHeader.Filename + "-" + uuid.NewString() + filepath.Ext(fileHeader.Filename)
+// 	dstPath := filepath.Join(dstDir, file_name)
+// 	dst, err := os.Create(dstPath)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer dst.Close()
+
+//		if _, err := io.Copy(dst, src); err != nil {
+//			return nil, err
+//		}
+//		return &file_name, nil
+//	}
 func SaveFile(fileHeader *multipart.FileHeader, dstDir string) (*string, error) {
 	src, err := fileHeader.Open()
 	if err != nil {
@@ -264,15 +297,18 @@ func SaveFile(fileHeader *multipart.FileHeader, dstDir string) (*string, error) 
 	}
 	defer src.Close()
 
-	// đảm bảo thư mục tồn tại
-	if err := os.MkdirAll(dstDir, os.ModePerm); err != nil {
-		return nil, err
+	// Đảm bảo thư mục tồn tại với quyền 0755
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return nil, fmt.Errorf("không thể tạo thư mục %s: %w", dstDir, err)
 	}
+
 	file_name := fileHeader.Filename + "-" + uuid.NewString() + filepath.Ext(fileHeader.Filename)
 	dstPath := filepath.Join(dstDir, file_name)
-	dst, err := os.Create(dstPath)
+
+	// Tạo file với quyền 0644
+	dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("không thể tạo file %s: %w", dstPath, err)
 	}
 	defer dst.Close()
 
@@ -281,6 +317,7 @@ func SaveFile(fileHeader *multipart.FileHeader, dstDir string) (*string, error) 
 	}
 	return &file_name, nil
 }
+
 func DeleteFile(dir, fileName string) error {
 	filePath := filepath.Join(dir, fileName)
 	if err := os.Remove(filePath); err != nil {

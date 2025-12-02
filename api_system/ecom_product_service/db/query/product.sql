@@ -6,7 +6,7 @@ INSERT INTO product (
   brand_id, category_id, shop_id,
   image, media,
    product_is_permission_return, product_is_permission_check,
-  create_by
+  create_by,delete_status
 ) VALUES (
   sqlc.arg('id'),
   sqlc.arg('name'),
@@ -20,7 +20,7 @@ INSERT INTO product (
   sqlc.arg('media'), 
   COALESCE(sqlc.narg('product_is_permission_return'), TRUE),
   COALESCE(sqlc.narg('product_is_permission_check'), TRUE),
-  sqlc.arg('create_by')
+  sqlc.arg('create_by'),"Pending"
 );
 
 -- name: UpdateProduct :exec
@@ -39,6 +39,13 @@ SET
   product_is_permission_return = COALESCE(sqlc.narg('product_is_permission_return'), product_is_permission_return),
   product_is_permission_check = COALESCE(sqlc.narg('product_is_permission_check'), product_is_permission_check),
   update_by = COALESCE(sqlc.narg('update_by'), update_by),
+  update_date = NOW()
+WHERE id = sqlc.arg('id');
+
+-- name: IncrementProductTotalSold :exec
+UPDATE product
+SET 
+  total_sold = total_sold + sqlc.arg('quantity'),
   update_date = NOW()
 WHERE id = sqlc.arg('id');
 
@@ -82,68 +89,64 @@ WHERE product_id = sqlc.arg('product_id');
 
 
 -- name: ListProductsAdvanced :many
-SELECT
-  p.id,
-  p.name,
-  p.`key`,
-  p.description,
-  p.short_description,
-  p.brand_id,
-  p.category_id,
-  p.shop_id,
-  p.image,
-  p.media,
-  p.delete_status,
-  p.product_is_permission_return,
-  p.product_is_permission_check,
-  p.create_date,
-  p.update_date,
-  p.create_by,
-  p.update_by,
-  COALESCE(MIN(ps.price), 0)  AS min_price,
-  COALESCE(MAX(ps.price), 0)  AS max_price,
-  (SELECT id FROM product_sku WHERE product_id = p.id ORDER BY price ASC  LIMIT 1) AS min_price_sku_id,
-  (SELECT id FROM product_sku WHERE product_id = p.id ORDER BY price DESC LIMIT 1) AS max_price_sku_id
+SELECT 
+    p.id,
+    p.name,
+    p.`key`,
+    p.description,
+    p.short_description,
+    p.brand_id,
+    p.category_id,
+    p.shop_id,
+    p.image,
+    p.media,
+    p.delete_status,
+    p.product_is_permission_return,
+    p.product_is_permission_check,
+    p.create_date,
+    p.update_date,
+    p.create_by,
+    p.update_by,
+    p.total_sold,
+    p.min_price,
+    p.max_price,
+    -- Subquery lấy SKU ID đại diện (giữ nguyên logic tối ưu)
+    (SELECT ps.id FROM product_sku ps WHERE ps.product_id = p.id ORDER BY ps.price ASC LIMIT 1) AS min_price_sku_id,
+    (SELECT ps.id FROM product_sku ps WHERE ps.product_id = p.id ORDER BY ps.price DESC LIMIT 1) AS max_price_sku_id
 FROM product p
-LEFT JOIN product_sku ps ON ps.product_id = p.id
-LEFT JOIN category c ON p.category_id = c.category_id
-LEFT JOIN brand b ON p.brand_id = b.brand_id
-WHERE
-  (sqlc.narg('brand_code') IS NULL OR b.code = sqlc.narg('brand_code'))
-  AND (sqlc.narg('category_path') IS NULL OR c.path =  sqlc.narg('category_path'))
-  AND (sqlc.narg('shop_id') IS NULL OR p.shop_id = sqlc.narg('shop_id'))
-  AND (sqlc.narg('keyword') IS NULL OR p.name LIKE CONCAT('%', sqlc.narg('keyword'), '%'))
-GROUP BY p.id
-HAVING
-  (sqlc.narg('price_min') IS NULL OR MAX(ps.price) >= sqlc.narg('price_min'))
-  AND (sqlc.narg('price_max') IS NULL OR MIN(ps.price) <= sqlc.narg('price_max'))
-ORDER BY
-  CASE WHEN sqlc.narg('sort') = 'price_asc'  THEN MIN(ps.price) END ASC,
-  CASE WHEN sqlc.narg('sort') = 'price_desc' THEN MIN(ps.price) END DESC,
-  CASE WHEN sqlc.narg('sort') = 'name_asc'   THEN p.name END ASC,
-  CASE WHEN sqlc.narg('sort') = 'name_desc'  THEN p.name END DESC,
-  p.create_date DESC
-LIMIT ?, ?;
+WHERE 
+    (sqlc.narg('delete_status') IS NULL OR p.delete_status = sqlc.narg('delete_status'))
+    -- Bộ lọc động (Dynamic Filtering)
+    AND (sqlc.narg('shop_id') IS NULL OR p.shop_id = sqlc.narg('shop_id'))
+    AND (sqlc.narg('category_id') IS NULL OR p.category_id = sqlc.narg('category_id'))
+    AND (sqlc.narg('brand_id') IS NULL OR p.brand_id = sqlc.narg('brand_id'))
+    AND (sqlc.narg('price_min') IS NULL OR p.min_price >= sqlc.narg('price_min'))
+    AND (sqlc.narg('price_max') IS NULL OR p.min_price <= sqlc.narg('price_max'))
+    -- Tìm kiếm (Lưu ý: Nếu cột name là VARCHAR(255) có index, hiệu năng sẽ tốt hơn TEXT)
+    AND (sqlc.narg('keyword') IS NULL OR p.name LIKE CONCAT('%', sqlc.narg('keyword'), '%'))
+ORDER BY 
+    -- Sắp xếp động (Dynamic Sorting)
+    CASE WHEN sqlc.narg('sort') = 'best_sell'  THEN p.total_sold END DESC,
+    CASE WHEN sqlc.narg('sort') = 'price_asc'  THEN p.min_price END ASC,
+    CASE WHEN sqlc.narg('sort') = 'price_desc' THEN p.min_price END DESC,
+    CASE WHEN sqlc.narg('sort') = 'name_asc'   THEN p.name END ASC,
+    CASE WHEN sqlc.narg('sort') = 'name_desc'  THEN p.name END DESC,
+    p.create_date DESC -- Mặc định sắp xếp theo mới nhất nếu không chọn gì
+LIMIT ? OFFSET ?;
+
 
 -- name: CountProductsAdvanced :one
-SELECT COUNT(*) AS total
-FROM (
-  SELECT 
-    p.id
-  FROM product p
-  LEFT JOIN product_sku ps ON ps.product_id = p.id
-  LEFT JOIN category c ON p.category_id = c.category_id
-  LEFT JOIN brand b ON p.brand_id = b.brand_id
-  WHERE
-    (sqlc.narg('brand_code') IS NULL OR b.code = sqlc.narg('brand_code'))
-    AND (sqlc.narg('category_path') IS NULL OR c.path =  sqlc.narg('category_path'))
+SELECT COUNT(*)
+FROM product p
+WHERE 
+    p.delete_status = 'Active'
     AND (sqlc.narg('shop_id') IS NULL OR p.shop_id = sqlc.narg('shop_id'))
-    AND (sqlc.narg('keyword') IS NULL OR p.name LIKE CONCAT('%', sqlc.narg('keyword'), '%'))
-  GROUP BY p.id
-  HAVING
-    (sqlc.narg('price_min') IS NULL OR MAX(ps.price) >= sqlc.narg('price_min'))
-    AND (sqlc.narg('price_max') IS NULL OR MIN(ps.price) <= sqlc.narg('price_max'))
-) AS t;
+    AND (sqlc.narg('category_id') IS NULL OR p.category_id = sqlc.narg('category_id'))
+    AND (sqlc.narg('brand_id') IS NULL OR p.brand_id = sqlc.narg('brand_id'))
+    AND (sqlc.narg('price_min') IS NULL OR p.min_price >= sqlc.narg('price_min'))
+    AND (sqlc.narg('price_max') IS NULL OR p.min_price <= sqlc.narg('price_max'))
+    AND (sqlc.narg('keyword') IS NULL OR p.name LIKE CONCAT('%', sqlc.narg('keyword'), '%'));
+
 
 -- name: GetAllProductID :many
 SELECT id FROM product;

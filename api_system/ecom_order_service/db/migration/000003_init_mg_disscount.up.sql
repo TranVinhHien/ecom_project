@@ -67,8 +67,8 @@ CREATE TABLE `voucher_usage_history` (
   `used_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
-  KEY `idx_voucher_user` (`voucher_id`, `user_id`) COMMENT 'Tối ưu cho việc check max_usage_per_user',
-  KEY `idx_shop_order` (`shop_order_id`)
+  KEY `idx_voucher_user` (`voucher_id`, `user_id`) COMMENT 'Tối ưu cho việc check max_usage_per_user'
+  -- KEY `idx_shop_order` (`shop_order_id`)
 ) ENGINE=InnoDB COMMENT='Lịch sử sử dụng voucher để đối soát';
 
 

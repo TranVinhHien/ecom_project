@@ -33,6 +33,7 @@ type Querier interface {
 	GetBrand(ctx context.Context, brandID string) (Brand, error)
 	GetBrandByCode(ctx context.Context, code string) (Brand, error)
 	GetCategory(ctx context.Context, categoryID string) (Category, error)
+	GetCategoryByPath(ctx context.Context, path sql.NullString) (Category, error)
 	GetProduct(ctx context.Context, id string) (GetProductRow, error)
 	GetProductByKey(ctx context.Context, key string) (GetProductByKeyRow, error)
 	GetProductIDs(ctx context.Context, productIds []string) ([]Product, error)
@@ -40,6 +41,7 @@ type Querier interface {
 	GetProductStockTotal(ctx context.Context, productID string) (interface{}, error)
 	GetRootCategories(ctx context.Context) ([]Category, error)
 	GetSubCategories(ctx context.Context, parent sql.NullString) ([]Category, error)
+	IncrementProductTotalSold(ctx context.Context, arg IncrementProductTotalSoldParams) error
 	ListBrands(ctx context.Context) ([]Brand, error)
 	ListBrandsPaged(ctx context.Context, arg ListBrandsPagedParams) ([]Brand, error)
 	ListCategories(ctx context.Context) ([]Category, error)

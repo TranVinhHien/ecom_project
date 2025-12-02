@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS ecommerce_transacion_db;
-USE ecommerce_transacion_db;
+CREATE DATABASE IF NOT EXISTS ecommerce_transaction_db;
+USE ecommerce_transaction_db;
 -- Thiết lập mã hóa UTF-8
 -- =================================================================
 -- DATABASE SCHEMA FOR ORDER SERVICE

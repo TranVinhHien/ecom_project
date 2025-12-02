@@ -66,7 +66,7 @@
 --     END IF;
 -- END //
 
--- DELIMITER ;\
+-- DELIMITER ;
 
 -- DELIMITER $$
 
@@ -179,3 +179,77 @@
 --     INNER JOIN option_value ov ON sa.option_value_id = ov.id
 --     WHERE sa.sku_id = ps.id
 -- );
+
+
+
+ALTER TABLE product 
+ADD COLUMN min_price DOUBLE DEFAULT 0,
+ADD COLUMN max_price DOUBLE DEFAULT 0;
+
+CREATE INDEX idx_product_shop_price ON product(shop_id, min_price, total_sold);
+
+-- -- Bước 2: Tạo Stored Procedure cập nhật giá
+-- DELIMITER $$
+
+-- CREATE PROCEDURE update_product_price_range(IN p_product_id VARCHAR(36))
+-- BEGIN
+--     DECLARE v_min DOUBLE DEFAULT 0;
+--     DECLARE v_max DOUBLE DEFAULT 0;
+
+--     -- Tính toán min/max từ bảng SKU
+--     SELECT 
+--         COALESCE(MIN(price), 0), 
+--         COALESCE(MAX(price), 0) 
+--     INTO v_min, v_max
+--     FROM product_sku 
+--     WHERE product_id = p_product_id;
+
+--     -- Cập nhật vào bảng Product
+--     UPDATE product 
+--     SET min_price = v_min,
+--         max_price = v_max,
+--         update_date = NOW()
+--     WHERE id = p_product_id;
+-- END$$
+
+-- DELIMITER ;
+
+
+-- -- Bước 3: Gắn vào Trigger (Cập nhật Trigger hiện có)
+-- DELIMITER $$
+
+-- -- Trigger khi thêm SKU mới
+-- CREATE TRIGGER after_product_sku_insert
+-- AFTER INSERT ON product_sku
+-- FOR EACH ROW
+-- BEGIN
+--     CALL update_product_price_range(NEW.product_id);
+-- END$$
+
+-- -- Trigger khi sửa giá SKU
+-- CREATE TRIGGER after_product_sku_update
+-- AFTER UPDATE ON product_sku
+-- FOR EACH ROW
+-- BEGIN
+--     CALL update_product_price_range(NEW.product_id);
+--     -- Nếu đổi product_id (ít khi xảy ra nhưng cần đề phòng)
+--     IF OLD.product_id != NEW.product_id THEN
+--         CALL update_product_price_range(OLD.product_id);
+--     END IF;
+-- END$$
+
+-- -- Trigger khi xóa SKU
+-- CREATE TRIGGER after_product_sku_delete
+-- AFTER DELETE ON product_sku
+-- FOR EACH ROW
+-- BEGIN
+--     CALL update_product_price_range(OLD.product_id);
+-- END$$
+
+-- DELIMITER ;
+
+-- -- Bước 4: Cập nhật dữ liệu cũ (Migration)
+-- UPDATE product p
+-- SET 
+--     min_price = (SELECT COALESCE(MIN(price), 0) FROM product_sku WHERE product_id = p.id),
+--     max_price = (SELECT COALESCE(MAX(price), 0) FROM product_sku WHERE product_id = p.id);

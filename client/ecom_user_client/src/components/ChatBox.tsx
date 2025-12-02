@@ -11,7 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import ProductCarousel from "@/components/ProductCarousel";
 import API from "@/assets/configs/api";
 import { generateComplaintUrl } from "@/lib/complaintUtils";
-import { useRouter } from "@/i18n/routing";
+import { useRouter, usePathname } from "@/i18n/routing";
+import { useChatStore } from "@/store/chatStore";
 
 interface Message {
   id: string;
@@ -54,15 +55,17 @@ export const clearChatHistory = () => {
 };
 
 export default function ChatBox() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, setIsOpen, pendingMessage, productKey, clearPendingMessage } = useChatStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [currentProductKey, setCurrentProductKey] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const isInitialized = useRef(false);
   const router = useRouter();
+  const pathname = usePathname();
   // Load chat history from localStorage on mount
   useEffect(() => {
     if (!isInitialized.current) {
@@ -197,16 +200,23 @@ export default function ChatBox() {
         throw new Error("Token not found");
       }
 
+      const requestBody: any = {
+        message: inputMessage,
+        session_id: sessionId,
+      };
+
+      // Add product_key only if it exists (from handleAskAI)
+      if (currentProductKey) {
+        requestBody.product_key = currentProductKey;
+      }
+      console.log("Request Body:", requestBody, "currentProductKey:", currentProductKey); // Debug log
       const response = await fetch(`${API.base_agent}${API.agent.message}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          message: inputMessage,
-          session_id: sessionId,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -224,6 +234,10 @@ export default function ChatBox() {
         };
         
         setMessages((prev) => [...prev, botMessage]);
+        
+        // Clear productKey after successful message send
+        setCurrentProductKey(null);
+        
         if (data.response.category){
         const url = generateComplaintUrl(
           {
@@ -271,6 +285,22 @@ export default function ChatBox() {
     setIsOpen(!isOpen);
   };
 
+  // Handle pending message from chatStore
+  useEffect(() => {
+    if (isOpen && pendingMessage && sessionId) {
+      setInputMessage(pendingMessage);
+      // Save productKey to local state before clearing
+      if (productKey) {
+        setCurrentProductKey(productKey);
+      }
+      clearPendingMessage();
+      // Auto send the message
+      setTimeout(() => {
+        sendMessage();
+      }, 100);
+    }
+  }, [isOpen, pendingMessage, sessionId]);
+
   const handleRating = async (messageId: string, rating: number) => {
     if (!sessionId) return;
 
@@ -294,6 +324,7 @@ export default function ChatBox() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${getCookieValues<string>(ACCESS_TOKEN)}`,
         },
         body: JSON.stringify({
           session_id: sessionId,

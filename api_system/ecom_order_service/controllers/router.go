@@ -26,6 +26,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 	// =================================================================
 	orders := group.Group("/orders")
 	{
+		orders.POST("/get_product_total_sold", api.getProductTotalSold())
 		orders.PUT("/callback_payment_online/:order_id", api.callbackPaymentOnline())
 	}
 
@@ -51,14 +52,18 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 
 	admin := orders.Group("/admin").Use(authorization(api.jwt))
 	{
-		// // GET /api/v1/admin/shop-orders - Lấy danh sách đơn hàng của shop
-		// admin.GET("/shop-orders", api.listShopOrders())
-
-		// // POST /api/v1/admin/shop-orders/{shopOrderCode}/ship - Đánh dấu đơn hàng đã ship
-		// admin.POST("/shop-orders/:shopOrderCode/ship", api.shipShopOrder())
-
+		admin_role := admin.Use(checkRole([]string{"ROLE_SELLER"}))
+		{
+			// // GET /api/v1/admin/shop-orders - Lấy danh sách đơn hàng của shop
+			admin_role.GET("/shop-orders", api.listShopOrders())
+			// // POST /api/v1/admin/shop-orders/{shopOrderCode}/ship - Đánh dấu đơn hàng đã ship
+			admin_role.POST("/shop-orders/:shopOrderCode/ship", api.shipShopOrder())
+		}
 		// PUT /api/v1/admin/shop-orders/{shopOrderCode}/status - Cập nhật trạng thái đơn hàng
-		admin.PUT("/update_status", api.updateShopOrderStatus())
+		adminALL := admin.Use(checkRole([]string{"ROLE_ADMIN", "ROLE_SELLER"}))
+		{
+			adminALL.PUT("/update_status", api.updateShopOrderStatus())
+		}
 	}
 
 	// =================================================================
@@ -85,10 +90,36 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 		{
 			// GET /api/v1/vouchers - list vouchers available to current user
 			vouchers_auth.GET("", api.listVouchersForUser())
-			// POST /api/v1/vouchers - create a voucher (admin/owner)
-			vouchers_auth.POST("", api.createVoucher())
-			// PUT /api/v1/vouchers/:voucherID - update a voucher
-			vouchers_auth.PUT("/:voucherID", api.updateVoucher())
+
+			// Admin/Seller management routes
+			voucher_role := vouchers_auth.Use(checkRole([]string{"ROLE_ADMIN", "ROLE_SELLER"}))
+			{
+				// GET /api/v1/vouchers/management - list all vouchers for management (admin sees PLATFORM, seller sees SHOP)
+				voucher_role.GET("/management", api.listVouchersForManagement())
+				// POST /api/v1/vouchers - create a voucher (admin/owner)
+				voucher_role.POST("", api.createVoucher())
+				// PUT /api/v1/vouchers/:voucherID - update a voucher
+				voucher_role.PUT("/:voucherID", api.updateVoucher())
+			}
+		}
+	}
+
+	// =================================================================
+	// COMMENT ENDPOINTS - Đánh giá sản phẩm
+	// =================================================================
+	comments := group.Group("/comments")
+	{
+		// GET /api/v1/comments - Lấy danh sách comment cho sản phẩm (public, không cần auth)
+		comments.GET("", api.listComments())
+		// POST /api/v1/comments/check-reviewed - Check các order items đã review chưa
+		comments.POST("/check-reviewed", api.checkReviewedItems())
+		// POST /api/v1/comments/bulk-stats - Lấy thống kê đánh giá cho nhiều sản phẩm
+		comments.POST("/bulk-stats", api.getBulkProductRatingStats())
+
+		comments_auth := comments.Use(authorization(api.jwt))
+		{
+			// POST /api/v1/comments - Tạo đánh giá sản phẩm (cần auth)
+			comments_auth.POST("", api.createComment())
 		}
 	}
 }

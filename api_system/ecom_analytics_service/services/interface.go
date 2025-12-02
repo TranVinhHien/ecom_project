@@ -7,4 +7,5 @@ import (
 type ServiceUseCase interface {
 	iservices.ServiceSITEUseCase
 	iservices.FeedbackUseCase
+	iservices.AgentAnalyticsUseCase
 }

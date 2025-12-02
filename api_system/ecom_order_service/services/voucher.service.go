@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	db "github.com/TranVinhHien/ecom_order_service/db/sqlc"
 	assets_services "github.com/TranVinhHien/ecom_order_service/services/assets"
@@ -13,22 +14,44 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherRequest) *assets_services.ServiceError {
-	// 1. Tạo UUID
-	voucherID := uuid.New().String()
+func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherRequest, shop_id, user_type string) *assets_services.ServiceError {
+	// 1. Validate toàn bộ dữ liệu đầu vào
+	if err := s.validateCreateVoucherRequest(req); err != nil {
+		return &assets_services.ServiceError{
+			Code: 400,
+			Err:  err,
+		}
+	}
 
+	// 2. Tạo UUID
+	voucherID := uuid.New().String()
+	owner := shop_id
 	max_discount_amount := 0.0
 	if req.MaxDiscountAmount != nil {
 		max_discount_amount = *req.MaxDiscountAmount
 	}
+	var ownerType db.VouchersOwnerType
+	if user_type == "ROLE_ADMIN" {
+		ownerType = db.VouchersOwnerTypePLATFORM
+		owner = s.env.PlatformOwnerID
+
+	} else if user_type == "ROLE_SELLER" {
+		ownerType = db.VouchersOwnerTypeSHOP
+	} else {
+		return &assets_services.ServiceError{
+			Code: 400,
+			Err:  fmt.Errorf("user_type không hợp lệ để tạo voucher"),
+		}
+	}
+
 	// 3. Map DTO (Request) sang Params (sqlc)
 	// Lưu ý: Giả định sqlc.yaml của bạn map ENUM của MySQL thành String của Go
 	params := db.CreateVoucherParams{
 		ID:                voucherID,
 		Name:              req.Name,
 		VoucherCode:       req.VoucherCode,
-		OwnerType:         db.VouchersOwnerType(req.OwnerType),
-		OwnerID:           req.OwnerID,
+		OwnerType:         ownerType,
+		OwnerID:           owner,
 		DiscountType:      db.VouchersDiscountType(req.DiscountType),
 		DiscountValue:     fmt.Sprintf("%.2f", req.DiscountValue),
 		MaxDiscountAmount: sql.NullString{String: fmt.Sprintf("%.2f", max_discount_amount), Valid: db.VouchersDiscountType(req.DiscountType) == db.VouchersDiscountTypePERCENTAGE},
@@ -39,7 +62,7 @@ func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherR
 		EndDate:           req.EndDate,
 		TotalQuantity:     req.TotalQuantity,
 		MaxUsagePerUser:   req.MaxUsagePerUser,
-		IsActive:          req.IsActive,
+		IsActive:          true,
 	}
 
 	// 4. Gọi DB
@@ -57,7 +80,7 @@ func (s *service) CreateVoucher(ctx context.Context, req services.CreateVoucherR
 
 // --- Hàm Sửa Voucher (Partial Update) ---
 
-func (s *service) UpdateVoucher(ctx context.Context, voucherID string, req services.UpdateVoucherRequest) *assets_services.ServiceError {
+func (s *service) UpdateVoucher(ctx context.Context, voucherID string, user_id string, user_type string, req services.UpdateVoucherRequest) *assets_services.ServiceError {
 	// 1. Map DTO (Request) sang Params (sqlc)
 	// Vì dùng `sqlc.narg`, struct Params của `UpdateVoucher` sẽ dùng `sql.Null*`
 	// Chúng ta chỉ set giá trị `Valid: true` cho những trường KHÔNG PHẢI nil trong request
@@ -65,7 +88,25 @@ func (s *service) UpdateVoucher(ctx context.Context, voucherID string, req servi
 	params := db.UpdateVoucherParams{
 		ID: voucherID,
 	}
+	voucher_db, err := s.repository.GetVoucherByID(ctx, voucherID)
+	if err != nil {
+		return &assets_services.ServiceError{
+			Code: 404,
+			Err:  fmt.Errorf("không tìm thấy voucher với ID %s: %w", voucherID, err)}
+	}
 
+	if voucher_db.OwnerType == db.VouchersOwnerTypePLATFORM && user_type == "ROLE_SELLER" {
+		return &assets_services.ServiceError{
+			Code: 403,
+			Err:  fmt.Errorf("bạn không có quyền sửa voucher này"),
+		}
+	}
+	if voucher_db.OwnerID != user_id && user_type == "ROLE_SELLER" {
+		return &assets_services.ServiceError{
+			Code: 403,
+			Err:  fmt.Errorf("bạn không có quyền sửa voucher này"),
+		}
+	}
 	// Ánh xạ các trường string
 	if req.Name != nil {
 		params.Name = sql.NullString{String: *req.Name, Valid: true}
@@ -109,15 +150,13 @@ func (s *service) UpdateVoucher(ctx context.Context, voucherID string, req servi
 	if req.EndDate != nil {
 		params.EndDate = sql.NullTime{Time: *req.EndDate, Valid: true}
 	}
-
-	// Ánh xạ trường bool
 	if req.IsActive != nil {
+
 		params.IsActive = sql.NullBool{Bool: *req.IsActive, Valid: true}
 	}
-
 	// 2. Gọi DB
 	// Nhờ `COALESCE` trong SQL, các trường `Valid: false` (mặc định) sẽ bị bỏ qua
-	err := s.repository.UpdateVoucher(ctx, params)
+	err = s.repository.UpdateVoucher(ctx, params)
 	if err != nil {
 		// Check lỗi (ví dụ: không tìm thấy voucher_id, hoặc duplicate voucher_code mới)
 		return &assets_services.ServiceError{
@@ -255,26 +294,385 @@ func (s *service) ListVouchersForUser(ctx context.Context, userID string, filter
 
 	// 3. Gộp cả hai danh sách và loại bỏ trùng lặp (nếu có)
 	// Dùng map để đảm bảo ID voucher là duy nhất
-	voucherMap := make(map[string]db.Vouchers)
+	combinedVouchers := make([]db.Vouchers, 0)
+	combinedVouchers = append(combinedVouchers, publicVouchers...)
+	combinedVouchers = append(combinedVouchers, assignedVouchers...)
 
-	// Thêm public trước
-	for _, v := range publicVouchers {
-		voucherMap[v.ID] = v
-	}
+	// 3.5 check người dùng còn được dùng voucher này không
+	for i, v := range combinedVouchers {
+		// Mặc định là hợp lệ
+		isValid := true
 
-	// Thêm assigned sau (nếu trùng, nó sẽ ghi đè, điều này ổn)
-	for _, v := range assignedVouchers {
-		voucherMap[v.ID] = v
+		// Gọi Repository đếm số lần user này đã dùng voucher này
+		// (Sử dụng query CountVoucherUsageByUser đã có trong sqlc)
+		usageCount, err := s.repository.CountVoucherUsageByUser(ctx, db.CountVoucherUsageByUserParams{
+			VoucherID: v.ID,
+			UserID:    userID,
+		})
+
+		if err != nil {
+			// Nếu lỗi DB, log lại và tạm thời coi như user chưa dùng (hoặc return lỗi tuỳ chính sách)
+			// Ở đây tôi chọn continue để không làm gãy cả danh sách
+			fmt.Printf("Error checking usage for voucher %s: %v\n", v.ID, err)
+			usageCount = 0
+		}
+
+		// Logic kiểm tra: Đã dùng >= Giới hạn cho phép => Hết lượt (Invalid)
+		if int32(usageCount) >= v.MaxUsagePerUser {
+			isValid = false
+		}
+
+		// (Tuỳ chọn) Kiểm tra thêm điều kiện tổng quan: Voucher đã hết lượt dùng toàn hệ thống chưa?
+		if v.UsedQuantity >= v.TotalQuantity {
+			isValid = false
+		}
+		combinedVouchers[i].IsActive = isValid
+
 	}
 
 	// 4. Chuyển map về slice
-	combinedVouchers := make([]db.Vouchers, 0, len(voucherMap))
-	for _, v := range voucherMap {
-		combinedVouchers = append(combinedVouchers, v)
+
+	// result := assets_services.NormalizeListSQLNulls(combinedVouchers, "data")
+	return map[string]interface{}{
+		"data": combinedVouchers,
+	}, nil
+}
+
+// --- Hàm Lấy Danh Sách Voucher Cho Admin/Seller Quản Lý ---
+func (s *service) ListVouchersForManagement(ctx context.Context, ownerID string, ownerType string, filter services.VoucherManagementFilterRequest) (map[string]interface{}, *assets_services.ServiceError) {
+	// 1. Validate ownerType
+	if ownerType != "PLATFORM" && ownerType != "SHOP" {
+		return nil, &assets_services.ServiceError{
+			Code: 400,
+			Err:  fmt.Errorf("owner_type không hợp lệ. Chỉ chấp nhận: PLATFORM, SHOP"),
+		}
 	}
-	result := assets_services.NormalizeListSQLNulls(combinedVouchers, "data")
+
+	// 2. Validate và set default cho pagination
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
+	if filter.PageSize <= 0 {
+		filter.PageSize = 20
+	}
+	if filter.PageSize > 100 {
+		filter.PageSize = 100 // Giới hạn tối đa 100 items/trang
+	}
+
+	// 3. Validate sort_by
+	validSortBy := map[string]bool{
+		"created_at_desc": true,
+		"created_at_asc":  true,
+		"start_date_desc": true,
+		"start_date_asc":  true,
+		"end_date_desc":   true,
+		"end_date_asc":    true,
+	}
+	if filter.SortBy == "" {
+		filter.SortBy = "created_at_desc" // Mặc định: mới nhất trước
+	}
+	if !validSortBy[filter.SortBy] {
+		return nil, &assets_services.ServiceError{
+			Code: 400,
+			Err:  fmt.Errorf("sort_by không hợp lệ. Allowed: created_at_desc, created_at_asc, start_date_desc, start_date_asc, end_date_desc, end_date_asc"),
+		}
+	}
+
+	// 4. Validate các filters
+	if filter.DiscountType != nil {
+		validDiscountTypes := map[string]bool{
+			"PERCENTAGE":   true,
+			"FIXED_AMOUNT": true,
+		}
+		if !validDiscountTypes[*filter.DiscountType] {
+			return nil, &assets_services.ServiceError{
+				Code: 400,
+				Err:  fmt.Errorf("discount_type không hợp lệ. Allowed: PERCENTAGE, FIXED_AMOUNT"),
+			}
+		}
+	}
+
+	if filter.AppliesToType != nil {
+		validAppliesToTypes := map[string]bool{
+			"ORDER_TOTAL":  true,
+			"SHIPPING_FEE": true,
+		}
+		if !validAppliesToTypes[*filter.AppliesToType] {
+			return nil, &assets_services.ServiceError{
+				Code: 400,
+				Err:  fmt.Errorf("applies_to_type không hợp lệ. Allowed: ORDER_TOTAL, SHIPPING_FEE"),
+			}
+		}
+	}
+
+	if filter.AudienceType != nil {
+		validAudienceTypes := map[string]bool{
+			"PUBLIC":   true,
+			"ASSIGNED": true,
+		}
+		if !validAudienceTypes[*filter.AudienceType] {
+			return nil, &assets_services.ServiceError{
+				Code: 400,
+				Err:  fmt.Errorf("audience_type không hợp lệ. Allowed: PUBLIC, ASSIGNED"),
+			}
+		}
+	}
+
+	if filter.Status != nil {
+		validStatuses := map[string]bool{
+			"ACTIVE":   true,
+			"EXPIRED":  true,
+			"UPCOMING": true,
+			"DEPLETED": true,
+		}
+		if !validStatuses[*filter.Status] {
+			return nil, &assets_services.ServiceError{
+				Code: 400,
+				Err:  fmt.Errorf("status không hợp lệ. Allowed: ACTIVE, EXPIRED, UPCOMING, DEPLETED"),
+			}
+		}
+	}
+
+	// 5. Build params cho sqlc queries
+	vouchers, total, err := s.getVouchersForManagementUsingSqlc(ctx, ownerID, ownerType, filter)
+	if err != nil {
+		return nil, &assets_services.ServiceError{
+			Code: 500,
+			Err:  fmt.Errorf("lỗi khi lấy danh sách voucher: %w", err),
+		}
+	}
+
+	// 6. Tính toán pagination metadata
+	totalPages := (total + int64(filter.PageSize) - 1) / int64(filter.PageSize)
+
+	result := map[string]interface{}{
+		"data": vouchers,
+		"pagination": map[string]interface{}{
+			"current_page": filter.Page,
+			"page_size":    filter.PageSize,
+			"total_items":  total,
+			"total_pages":  totalPages,
+		},
+	}
 
 	return result, nil
+}
+
+// getVouchersForManagementUsingSqlc sử dụng sqlc generated queries
+func (s *service) getVouchersForManagementUsingSqlc(ctx context.Context, ownerID string, ownerType string, filter services.VoucherManagementFilterRequest) ([]map[string]interface{}, int64, error) {
+	// 1. Build params cho Count query
+	if db.VouchersOwnerType(ownerType) == db.VouchersOwnerTypePLATFORM {
+		ownerID = s.env.PlatformOwnerID
+	}
+	countParams := db.CountVouchersForManagementParams{
+		OwnerID:   ownerID,
+		OwnerType: db.VouchersOwnerType(ownerType),
+	}
+
+	// Add optional filters với LIKE pattern cho search
+	if filter.VoucherCode != nil && *filter.VoucherCode != "" {
+		voucherCodePattern := "%" + *filter.VoucherCode + "%"
+		countParams.VoucherCode = sql.NullString{String: voucherCodePattern, Valid: true}
+	}
+	if filter.Name != nil && *filter.Name != "" {
+		namePattern := "%" + *filter.Name + "%"
+		countParams.Name = sql.NullString{String: namePattern, Valid: true}
+	}
+	if filter.DiscountType != nil {
+		countParams.DiscountType = db.NullVouchersDiscountType{
+			VouchersDiscountType: db.VouchersDiscountType(*filter.DiscountType),
+			Valid:                true,
+		}
+	}
+	if filter.AppliesToType != nil {
+		countParams.AppliesToType = db.NullVouchersAppliesToType{
+			VouchersAppliesToType: db.VouchersAppliesToType(*filter.AppliesToType),
+			Valid:                 true,
+		}
+	}
+	if filter.AudienceType != nil {
+		countParams.AudienceType = db.NullVouchersAudienceType{
+			VouchersAudienceType: db.VouchersAudienceType(*filter.AudienceType),
+			Valid:                true,
+		}
+	}
+	if filter.IsActive != nil {
+		countParams.IsActive = sql.NullBool{Bool: *filter.IsActive, Valid: true}
+	}
+	if filter.Status != nil {
+		countParams.Status = *filter.Status
+	}
+
+	// 2. Get total count
+	total, err := s.repository.CountVouchersForManagement(ctx, countParams)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error counting vouchers: %w", err)
+	}
+
+	// 3. Build params cho List query
+	offset := int32((filter.Page - 1) * filter.PageSize)
+	limitVal := int32(filter.PageSize)
+
+	// Prepare status value
+	var statusValue interface{} = nil
+	if filter.Status != nil {
+		statusValue = *filter.Status
+	}
+
+	// 4. Call appropriate query based on sort_by
+	var vouchersDB []db.Vouchers
+
+	switch filter.SortBy {
+	case "created_at_asc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortCreatedAtAsc(ctx, db.ListVouchersForManagementBySortCreatedAtAscParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	case "start_date_desc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortStartDateDesc(ctx, db.ListVouchersForManagementBySortStartDateDescParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	case "start_date_asc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortStartDateAsc(ctx, db.ListVouchersForManagementBySortStartDateAscParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	case "end_date_desc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortEndDateDesc(ctx, db.ListVouchersForManagementBySortEndDateDescParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	case "end_date_asc":
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortEndDateAsc(ctx, db.ListVouchersForManagementBySortEndDateAscParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	default: // created_at_desc
+		vouchersDB, err = s.repository.ListVouchersForManagementBySortCreatedAtDesc(ctx, db.ListVouchersForManagementBySortCreatedAtDescParams{
+			OwnerID:       ownerID,
+			OwnerType:     db.VouchersOwnerType(ownerType),
+			VoucherCode:   countParams.VoucherCode,
+			Name:          countParams.Name,
+			DiscountType:  countParams.DiscountType,
+			AppliesToType: countParams.AppliesToType,
+			AudienceType:  countParams.AudienceType,
+			IsActive:      countParams.IsActive,
+			Status:        statusValue,
+			Limit:         limitVal,
+			Offset:        offset,
+		})
+	}
+
+	if err != nil {
+		return nil, 0, fmt.Errorf("error fetching vouchers: %w", err)
+	}
+
+	// 5. Convert to response format with calculated fields
+	vouchers := make([]map[string]interface{}, 0, len(vouchersDB))
+	for _, v := range vouchersDB {
+		status := s.calculateVoucherStatus(v)
+
+		voucherMap := map[string]interface{}{
+			"id":                  v.ID,
+			"name":                v.Name,
+			"voucher_code":        v.VoucherCode,
+			"owner_type":          v.OwnerType,
+			"owner_id":            v.OwnerID,
+			"discount_type":       v.DiscountType,
+			"discount_value":      v.DiscountValue,
+			"max_discount_amount": v.MaxDiscountAmount,
+			"applies_to_type":     v.AppliesToType,
+			"min_purchase_amount": v.MinPurchaseAmount,
+			"audience_type":       v.AudienceType,
+			"start_date":          v.StartDate,
+			"end_date":            v.EndDate,
+			"total_quantity":      v.TotalQuantity,
+			"used_quantity":       v.UsedQuantity,
+			"remaining_quantity":  v.TotalQuantity - v.UsedQuantity,
+			"max_usage_per_user":  v.MaxUsagePerUser,
+			"is_active":           v.IsActive,
+			"status":              status,
+			"created_at":          v.CreatedAt,
+			"updated_at":          v.UpdatedAt,
+		}
+
+		vouchers = append(vouchers, voucherMap)
+	}
+
+	return vouchers, total, nil
+}
+
+// calculateVoucherStatus tính toán trạng thái hiện tại của voucher
+func (s *service) calculateVoucherStatus(v db.Vouchers) string {
+	now := time.Now()
+
+	// Check depleted first
+	if v.UsedQuantity >= v.TotalQuantity {
+		return "DEPLETED"
+	}
+
+	// Check if expired
+	if v.EndDate.Before(now) {
+		return "EXPIRED"
+	}
+
+	// Check if upcoming
+	if v.StartDate.After(now) {
+		return "UPCOMING"
+	}
+
+	// Check if active
+	if v.IsActive && v.StartDate.Before(now) && v.EndDate.After(now) {
+		return "ACTIVE"
+	}
+
+	return "INACTIVE"
 }
 
 //================================================================
@@ -377,7 +775,7 @@ func (s *service) checkSingleVoucher(ctx context.Context, userID string, voucher
 		return false, "Lỗi hệ thống", voucher
 	}
 	if count >= int64(voucher.MaxUsagePerUser) {
-		return false, "Bạn đã sử dụng hết số lần cho voucher này.", voucher
+		return false, fmt.Sprintf("Bạn đã sử dụng hết số lần cho voucher %s.", voucher.Name), voucher
 	}
 
 	// 5. If all checks pass, the voucher is valid *for this context*
@@ -572,4 +970,126 @@ func (s *service) checkSingleVoucherTx(ctx context.Context, q db.Querier, userID
 	}
 
 	return true, "OK"
+}
+
+// =================================================================
+// HÀM VALIDATE TẠO VOUCHER
+// =================================================================
+
+// validateCreateVoucherRequest kiểm tra tính hợp lệ của toàn bộ dữ liệu tạo voucher
+func (s *service) validateCreateVoucherRequest(req services.CreateVoucherRequest) error {
+	// 1. Validate Name
+	if req.Name == "" {
+		return fmt.Errorf("tên voucher không được để trống")
+	}
+	if len(req.Name) > 255 {
+		return fmt.Errorf("tên voucher không được vượt quá 255 ký tự")
+	}
+
+	// 2. Validate VoucherCode
+	if req.VoucherCode == "" {
+		return fmt.Errorf("mã voucher không được để trống")
+	}
+	if len(req.VoucherCode) > 50 {
+		return fmt.Errorf("mã voucher không được vượt quá 50 ký tự")
+	}
+
+	// 5. Validate DiscountType
+	validDiscountTypes := map[string]bool{
+		"PERCENTAGE":   true,
+		"FIXED_AMOUNT": true,
+	}
+	if !validDiscountTypes[req.DiscountType] {
+		return fmt.Errorf("discount_type không hợp lệ. Chỉ chấp nhận: PERCENTAGE, FIXED_AMOUNT")
+	}
+
+	// 6. Validate DiscountValue
+	if req.DiscountValue <= 0 {
+		return fmt.Errorf("discount_value phải lớn hơn 0")
+	}
+
+	// Nếu là PERCENTAGE, giá trị phải từ 0-100
+	if req.DiscountType == "PERCENTAGE" {
+		if req.DiscountValue > 100 {
+			return fmt.Errorf("discount_value cho PERCENTAGE không được vượt quá 100")
+		}
+	}
+
+	// 7. Validate MaxDiscountAmount
+	// Nếu discount_type là PERCENTAGE, max_discount_amount BẮT BUỘC phải có
+	if req.DiscountType == "PERCENTAGE" {
+		if req.MaxDiscountAmount == nil {
+			return fmt.Errorf("max_discount_amount bắt buộc phải có khi discount_type là PERCENTAGE")
+		}
+		if *req.MaxDiscountAmount <= 0 {
+			return fmt.Errorf("max_discount_amount phải lớn hơn 0")
+		}
+	}
+
+	// 8. Validate AppliesToType
+	validAppliesToTypes := map[string]bool{
+		"ORDER_TOTAL":  true,
+		"SHIPPING_FEE": true,
+	}
+	if !validAppliesToTypes[req.AppliesToType] {
+		return fmt.Errorf("applies_to_type không hợp lệ. Chỉ chấp nhận: ORDER_TOTAL, SHIPPING_FEE")
+	}
+
+	// 9. Validate MinPurchaseAmount
+	if req.MinPurchaseAmount < 0 {
+		return fmt.Errorf("min_purchase_amount không được âm")
+	}
+
+	// 10. Validate AudienceType
+	validAudienceTypes := map[string]bool{
+		"PUBLIC":   true,
+		"ASSIGNED": true,
+	}
+	if !validAudienceTypes[req.AudienceType] {
+		return fmt.Errorf("audience_type không hợp lệ. Chỉ chấp nhận: PUBLIC, ASSIGNED")
+	}
+
+	// 11. Validate UserUse (danh sách user_id) - BẮT BUỘC khi audience_type là ASSIGNED
+	if req.AudienceType == "ASSIGNED" {
+		if len(req.UserUse) == 0 {
+			return fmt.Errorf("audience_type là ASSIGNED phải có danh sách user_use")
+		}
+		// Kiểm tra các user_id không rỗng
+		for i, userID := range req.UserUse {
+			if userID == "" {
+				return fmt.Errorf("user_use[%d] không được để trống", i)
+			}
+		}
+	}
+
+	// 12. Validate StartDate và EndDate
+	if req.StartDate.IsZero() {
+		return fmt.Errorf("start_date không được để trống")
+	}
+	if req.EndDate.IsZero() {
+		return fmt.Errorf("end_date không được để trống")
+	}
+	if req.EndDate.Before(req.StartDate) {
+		return fmt.Errorf("end_date phải sau start_date")
+	}
+	if req.StartDate.Before(req.StartDate.Add(-24 * 365 * 10 * time.Hour)) {
+		// Kiểm tra start_date không quá xa trong quá khứ (10 năm)
+		return fmt.Errorf("start_date không hợp lệ")
+	}
+
+	// 13. Validate TotalQuantity
+	if req.TotalQuantity <= 0 {
+		return fmt.Errorf("total_quantity phải lớn hơn 0")
+	}
+
+	// 14. Validate MaxUsagePerUser
+	if req.MaxUsagePerUser <= 0 {
+		return fmt.Errorf("max_usage_per_user phải lớn hơn 0")
+	}
+	// max_usage_per_user không được lớn hơn total_quantity
+	if req.MaxUsagePerUser > req.TotalQuantity {
+		return fmt.Errorf("max_usage_per_user không được lớn hơn total_quantity")
+	}
+
+	return nil
 }

@@ -29,40 +29,113 @@ func (s *service) GetSKUProduct(ctx context.Context, product_sku_id string) (map
 	//log.Printf("[GetSKUProduct] Thành công lấy thông tin SKU với ID: %s", product_sku_id)
 	return result, nil
 }
-func (s *service) GetAllProductSimple(ctx context.Context, query services.QueryFilter, category_path, brand_code, shop_id, keywords, sort string, min_price, max_price float64) (map[string]interface{}, *assets_services.ServiceError) {
+func (s *service) GetAllProductSimple(ctx context.Context, query services.QueryFilter, category_path, brand_code, shop_id, keywords, sort string, min_price, max_price float64, status string) (map[string]interface{}, *assets_services.ServiceError) {
 	//log.Printf("[GetAllProductSimple] Bắt đầu lấy danh sách sản phẩm - Trang: %d, Kích thước: %d, Danh mục: %s, Thương hiệu: %s, Shop: %s, Từ khóa: %s",
 	//	query.Page, query.PageSize, category_path, brand_code, shop_id, keywords)
-
-	product_spu, err := s.repository.ListProductsAdvanced(ctx, db.ListProductsAdvancedParams{
+	cate_id := ""
+	brand_id := ""
+	if category_path != "" {
+		category, err := s.repository.GetCategoryByPath(ctx, sql.NullString{String: category_path, Valid: true})
+		if err != nil {
+			return nil, assets_services.NewError(400, fmt.Errorf("không tìm thấy danh mục với đường dẫn: %s. Lỗi: %v", category_path, err))
+		}
+		cate_id = category.CategoryID
+	}
+	if brand_code != "" {
+		brand, err := s.repository.GetBrandByCode(ctx, brand_code)
+		if err != nil {
+			return nil, assets_services.NewError(400, fmt.Errorf("không tìm thấy thương hiệu với mã: %s. Lỗi: %v", brand_code, err))
+		}
+		brand_id = brand.BrandID
+	}
+	var deleteStatus db.ProductDeleteStatus
+	switch status {
+	case "Pending":
+		deleteStatus = db.ProductDeleteStatusPending
+	case "Deleted":
+		deleteStatus = db.ProductDeleteStatusDeleted
+	default:
+		deleteStatus = db.ProductDeleteStatusActive
+	}
+	product_spu, err := s.repository.ListProductsDynamic(ctx, db.ListProductsAdvancedParams{
 		Limit:        int32(query.PageSize),
 		Offset:       int32((query.Page - 1) * query.PageSize),
-		BrandCode:    sql.NullString{String: brand_code, Valid: brand_code != ""},
-		CategoryPath: sql.NullString{String: category_path, Valid: category_path != ""},
+		BrandID:      sql.NullString{String: brand_id, Valid: brand_id != ""},
+		DeleteStatus: db.NullProductDeleteStatus{ProductDeleteStatus: deleteStatus, Valid: true},
+		CategoryID:   sql.NullString{String: cate_id, Valid: cate_id != ""},
 		ShopID:       sql.NullString{String: shop_id, Valid: shop_id != ""},
 		PriceMin:     sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
 		PriceMax:     sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
 		Keyword:      sql.NullString{String: keywords, Valid: keywords != ""},
-		Sort:         sort,
+		Sort:         sql.NullString{String: strings.ToLower(sort), Valid: sort != ""},
 	})
 	if err != nil {
 		//log.Printf("[GetAllProductSimple] LỖI: Không thể lấy danh sách sản phẩm từ database. Chi tiết: %v", err)
 		return nil, assets_services.NewError(400, fmt.Errorf("không thể lấy danh sách sản phẩm. Lỗi: %v", err))
 	}
 
-	totalElements, err := s.repository.CountProductsAdvanced(ctx, db.CountProductsAdvancedParams{
-		BrandCode:    sql.NullString{String: brand_code, Valid: brand_code != ""},
-		CategoryPath: sql.NullString{String: category_path, Valid: category_path != ""},
+	totalElements, err := s.repository.CountProductsDynamic(ctx, db.ListProductsAdvancedParams{
+		BrandID:      sql.NullString{String: brand_id, Valid: brand_id != ""},
+		CategoryID:   sql.NullString{String: cate_id, Valid: cate_id != ""},
 		ShopID:       sql.NullString{String: shop_id, Valid: shop_id != ""},
 		PriceMin:     sql.NullFloat64{Float64: min_price, Valid: min_price >= 0},
 		PriceMax:     sql.NullFloat64{Float64: max_price, Valid: max_price >= 0},
 		Keyword:      sql.NullString{String: keywords, Valid: keywords != ""},
+		DeleteStatus: db.NullProductDeleteStatus{ProductDeleteStatus: deleteStatus, Valid: true},
 	})
 	if err != nil {
 		//log.Printf("[GetAllProductSimple] LỖI: Không thể đếm tổng số sản phẩm. Chi tiết: %v", err)
 		return nil, assets_services.NewError(400, fmt.Errorf("không thể đếm tổng số sản phẩm. Lỗi: %v", err))
 	}
 
-	result := assets_services.NormalizeListSQLNulls(product_spu, "data")
+	// Lấy danh sách product_id từ kết quả
+	productIDs := make([]string, len(product_spu))
+	for i, product := range product_spu {
+		productIDs[i] = product.ID
+	}
+
+	// Gọi API để lấy thông tin đánh giá cho tất cả sản phẩm
+	ratingStats := make(map[string]services.ProductRating)
+	if len(productIDs) > 0 {
+		stats, err := s.apiServer.GetBulkProductRatingStats(productIDs)
+		if err != nil {
+			//log.Printf("[GetAllProductSimple] CẢNH BÁO: Không thể lấy thông tin đánh giá. Chi tiết: %v", err)
+			// Không return error, chỉ log warning và tiếp tục với dữ liệu rỗng
+		} else {
+			// Convert sang ProductRating
+			for productID, stat := range stats {
+				ratingStats[productID] = services.ProductRating{
+					ProductID:     stat.ProductID,
+					TotalReviews:  stat.TotalReviews,
+					AverageRating: stat.AverageRating,
+				}
+			}
+		}
+	}
+	// Tạo slice mới kết hợp product và rating
+	productsWithRating := make([]interface{}, len(product_spu))
+	for i, product := range product_spu {
+		// Convert product sang map
+		productMap := assets_services.NormalizeToInterface(product)
+
+		// Thêm rating vào product
+		if rating, exists := ratingStats[product.ID]; exists {
+			productMap.(map[string]interface{})["rating"] = rating
+		} else {
+			// Nếu không có rating, set giá trị mặc định
+			productMap.(map[string]interface{})["rating"] = services.ProductRating{
+				ProductID:     product.ID,
+				TotalReviews:  0,
+				AverageRating: 0.0,
+			}
+		}
+
+		productsWithRating[i] = productMap
+	}
+
+	// Tạo result với data đã có rating
+	result := make(map[string]interface{})
+	result["data"] = productsWithRating
 	totalPage := int64(math.Ceil(float64(totalElements) / float64(query.PageSize)))
 	result["currentPage"] = query.Page
 	result["totalPages"] = totalPage
@@ -408,21 +481,58 @@ func (s *service) CreateProduct(ctx context.Context, token, userName string, pro
 
 func (s *service) UpdateProduct(
 	ctx context.Context,
-	token, userName, productID string,
+	role_user, userName, productID string,
+
 	product services.ProductUpdateParams, // Struct chứa dữ liệu JSON
 	mainImage *multipart.FileHeader, // Ảnh chính mới (nếu có)
 	newMediaFiles []*multipart.FileHeader, // Ảnh media mới (nếu có)
 	optionImageUpdates []services.OptionImageUpdate, // Cập nhật ảnh option (nếu có)
 ) *assets_services.ServiceError {
-
+	currentProduct, err := s.repository.GetProduct(ctx, productID) // Giả định hàm này trả về struct có Image, Media (string JSON), etc.
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &assets_services.ServiceError{Code: 404, Err: fmt.Errorf("sản phẩm không tồn tại")} // Lỗi 404 nên được xử lý bên ngoài transaction
+		}
+		return assets_services.NewError(400, fmt.Errorf("lỗi khi lấy thông tin sản phẩm: %w", err))
+	}
 	// kiểm tra ngoại lệ nếu là delete status thì sẽ cập nhật lại sản phẩm trạng thái là xóa
 	if product.DeleteStatus != nil && *product.DeleteStatus {
-		err := s.repository.DeleteProduct(ctx, productID)
+		err := s.repository.UpdateProduct(ctx, db.UpdateProductParams{
+			ID:           productID,
+			DeleteStatus: db.NullProductDeleteStatus{ProductDeleteStatus: db.ProductDeleteStatusDeleted, Valid: true},
+			UpdateBy:     sql.NullString{String: userName, Valid: true},
+		})
 		if err != nil {
 			return assets_services.NewError(400, fmt.Errorf("lỗi khi xóa sản phẩm: %w", err))
 		}
 		return assets_services.NewError(200, fmt.Errorf("xóa sản phẩm thành công"))
 	}
+	if product.ApprovalProduct != nil {
+		if role_user != "ROLE_ADMIN" {
+			return assets_services.NewError(403, fmt.Errorf("bạn không có quyền kiểm duyệt sản phẩm"))
+		}
+		ProductDeleteStatus := db.ProductDeleteStatusDeleted
+		if *product.ApprovalProduct {
+			if currentProduct.DeleteStatus.ProductDeleteStatus == db.ProductDeleteStatusActive {
+				return assets_services.NewError(400, fmt.Errorf("sản phẩm đã được duyệt trước đó"))
+			}
+			if currentProduct.DeleteStatus.ProductDeleteStatus == db.ProductDeleteStatusDeleted {
+				return assets_services.NewError(400, fmt.Errorf("sản phẩm đã bị xóa không thể duyệt"))
+			}
+
+			ProductDeleteStatus = db.ProductDeleteStatusActive
+
+		}
+		err := s.repository.UpdateProduct(ctx, db.UpdateProductParams{
+			ID:           productID,
+			DeleteStatus: db.NullProductDeleteStatus{ProductDeleteStatus: ProductDeleteStatus, Valid: true},
+			UpdateBy:     sql.NullString{String: userName, Valid: true},
+		})
+		if err != nil {
+			return assets_services.NewError(400, fmt.Errorf("lỗi khi xóa sản phẩm: %w", err))
+		}
+	}
+
 	// ----- Bước 1: Upload tất cả ảnh mới LÊN TRƯỚC -----
 	var newMainImageUrl string
 	var newMediaUrls []string
@@ -467,13 +577,6 @@ func (s *service) UpdateProduct(
 	// ----- Bước 2: Thực hiện update trong transaction -----
 	txErr := s.repository.ExecTS(ctx, func(tx db.Querier) error {
 		// 2.1 Lấy thông tin sản phẩm hiện tại (bao gồm ảnh)
-		currentProduct, err := tx.GetProduct(ctx, productID) // Giả định hàm này trả về struct có Image, Media (string JSON), etc.
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return fmt.Errorf("sản phẩm không tồn tại") // Lỗi 404 nên được xử lý bên ngoài transaction
-			}
-			return fmt.Errorf("lỗi khi lấy thông tin sản phẩm hiện tại: %w", err)
-		}
 
 		updateProductParams := db.UpdateProductParams{
 			ID:       productID,
@@ -756,28 +859,17 @@ func containsString(slice []string, str string) bool {
 }
 
 func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []services.ProductUpdateSKUReserver, type_req services.ProductUpdateType) *assets_services.ServiceError {
-	//log.Printf("[UpdateSKUReserverProduct] Bắt đầu cập nhật số lượng đặt trước cho %d SKU với loại: %v", len(productSKU), type_req)
-
 	err := s.repository.ExecTS(ctx, func(tx db.Querier) error {
 		for _, sku := range productSKU {
-			//log.Printf("[UpdateSKUReserverProduct] Xử lý SKU %d/%d - ID: %s, Số lượng: %d", i+1, len(productSKU), sku.SkuID, sku.QuantityReserver)
-
 			sku_db, err := tx.GetProductSKU(ctx, sku.SkuID)
 			if err != nil {
-				//log.Printf("[UpdateSKUReserverProduct] LỖI: Không tìm thấy SKU với ID: %s. Chi tiết: %v", sku.SkuID, err)
 				return fmt.Errorf("không tìm thấy SKU với ID: %s. Lỗi: %w", sku.SkuID, err)
 			}
 
 			switch {
 			case type_req == services.HOLD:
-				//log.Printf("[UpdateSKUReserverProduct] HOLD - SKU %s: Tồn kho hiện tại: %d, Đã đặt trước: %d, Yêu cầu thêm: %d",
-				// sku.SkuID, sku_db.Quantity, sku_db.QuantityReserver, sku.QuantityReserver)
-
-				// update reserver if sku_db.Quantity - newReserver >=0
 				sku_db.QuantityReserver += sku.QuantityReserver
 				if sku_db.Quantity-sku_db.QuantityReserver < 0 {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Không đủ số lượng tồn kho cho SKU %s. Tồn kho: %d, Đã đặt trước: %d, Yêu cầu: %d",
-					// sku.SkuID, sku_db.Quantity, sku_db.QuantityReserver-sku.QuantityReserver, sku.QuantityReserver)
 					return fmt.Errorf("không đủ số lượng tồn kho cho SKU %s (Còn: %d, Yêu cầu: %d)", sku.SkuID, sku_db.Quantity-sku_db.QuantityReserver+sku.QuantityReserver, sku.QuantityReserver)
 				}
 
@@ -786,21 +878,13 @@ func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []ser
 					QuantityReserver: sql.NullInt32{Int32: sku_db.QuantityReserver, Valid: true},
 				})
 				if err != nil {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Không thể cập nhật HOLD cho SKU %s. Chi tiết: %v", sku.SkuID, err)
 					return fmt.Errorf("không thể cập nhật số lượng đặt trước cho SKU: %w", err)
 				}
-				//log.Printf("[UpdateSKUReserverProduct] HOLD thành công - SKU %s: Số lượng đặt trước mới: %d", sku.SkuID, sku_db.QuantityReserver)
 
 			case type_req == services.COMMIT:
-				//log.Printf("[UpdateSKUReserverProduct] COMMIT - SKU %s: Tồn kho: %d, Đã đặt trước: %d, Xác nhận: %d",
-				// sku.SkuID, sku_db.Quantity, sku_db.QuantityReserver, sku.QuantityReserver)
-
-				// update - reserver and quentity if reserver - sku.reserver >=0 and  quantity - reserver >=0
 				new_QuantityReserver := sku_db.QuantityReserver - sku.QuantityReserver
 				new_Quantity := sku_db.Quantity - sku.QuantityReserver
 				if new_QuantityReserver < 0 || new_Quantity < 0 {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Dữ liệu không hợp lệ khi COMMIT SKU %s. Đặt trước mới: %d, Tồn kho mới: %d",
-					// sku.SkuID, new_QuantityReserver, new_Quantity)
 					return fmt.Errorf("dữ liệu không hợp lệ khi xác nhận đơn hàng cho SKU %s", sku.SkuID)
 				}
 				err = tx.UpdateProductSKU(ctx, db.UpdateProductSKUParams{
@@ -809,20 +893,20 @@ func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []ser
 					Quantity:         sql.NullInt32{Int32: new_Quantity, Valid: true},
 				})
 				if err != nil {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Không thể cập nhật COMMIT cho SKU %s. Chi tiết: %v", sku.SkuID, err)
 					return fmt.Errorf("không thể xác nhận đơn hàng cho SKU: %w", err)
 				}
-				//log.Printf("[UpdateSKUReserverProduct] COMMIT thành công - SKU %s: Tồn kho mới: %d, Đặt trước mới: %d", sku.SkuID, new_Quantity, new_QuantityReserver)
+				// trường hợp cập nhật xác nhận sản phẩm thì sẽ cộng số lượng mua nó vào trường số lượng đã bán
+				err = tx.IncrementProductTotalSold(ctx, db.IncrementProductTotalSoldParams{
+					Quantity: int64(sku.QuantityReserver),
+					ID:       sku_db.ProductID,
+				})
+				if err != nil {
+					return fmt.Errorf("không thể cập nhật thêm vào số lượng bán hàng cho shop.: %w", err)
+				}
 
 			case type_req == services.ROLLBACK:
-				//log.Printf("[UpdateSKUReserverProduct] ROLLBACK - SKU %s: Đã đặt trước: %d, Hoàn lại: %d",
-				// sku.SkuID, sku_db.QuantityReserver, sku.QuantityReserver)
-
-				// update reserver if sku_db.reserver - newReserver >= 0
 				sku_db.QuantityReserver -= sku.QuantityReserver
 				if sku_db.QuantityReserver < 0 {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Số lượng đặt trước không hợp lệ khi ROLLBACK SKU %s. Đặt trước mới: %d",
-					// sku.SkuID, sku_db.QuantityReserver)
 					return fmt.Errorf("dữ liệu không hợp lệ khi hoàn tác đơn hàng cho SKU %s", sku.SkuID)
 				}
 				err = tx.UpdateProductSKU(ctx, db.UpdateProductSKUParams{
@@ -830,13 +914,9 @@ func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []ser
 					QuantityReserver: sql.NullInt32{Int32: sku_db.QuantityReserver, Valid: true},
 				})
 				if err != nil {
-					//log.Printf("[UpdateSKUReserverProduct] LỖI: Không thể cập nhật ROLLBACK cho SKU %s. Chi tiết: %v", sku.SkuID, err)
 					return fmt.Errorf("không thể hoàn tác đơn hàng cho SKU: %w", err)
 				}
-				//log.Printf("[UpdateSKUReserverProduct] ROLLBACK thành công - SKU %s: Số lượng đặt trước mới: %d", sku.SkuID, sku_db.QuantityReserver)
-
 			default:
-				//log.Printf("[UpdateSKUReserverProduct] LỖI: Loại cập nhật không hợp lệ: %v", type_req)
 				return fmt.Errorf("loại cập nhật không hợp lệ: %v", type_req)
 			}
 		}
@@ -844,11 +924,9 @@ func (s *service) UpdateSKUReserverProduct(ctx context.Context, productSKU []ser
 	})
 
 	if err != nil {
-		//log.Printf("[UpdateSKUReserverProduct] LỖI: Cập nhật số lượng đặt trước thất bại. Chi tiết: %v", err)
 		return assets_services.NewError(400, fmt.Errorf("không thể cập nhật số lượng đặt trước: %w", err))
 	}
 
-	//log.Printf("[UpdateSKUReserverProduct] Thành công cập nhật %d SKU với loại: %v", len(productSKU), type_req)
 	return nil
 }
 

@@ -24,21 +24,8 @@ import AddressDialog from "@/components/AddressDialog";
 import type { UserAddress } from "@/types/address.types";
 import API from "@/assets/configs/api";
 import { apiClient } from "@/lib/apiClient";
+import { UserProfile } from "@/types/user.types";
 
-interface UserProfile {
-  id: string;
-  userId: string;
-  name: string;
-  firstName: string;
-  lastName: string;
-  dob: string;
-  phone_number: string;
-  gender: string;
-  image?: {
-    valid: boolean;
-    data: string;
-  };
-}
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -55,6 +42,9 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editedProfile, setEditedProfile] = useState<Partial<UserProfile>>({});
+
+
+
 
   useEffect(() => {
     const token = getCookieValues<string>(ACCESS_TOKEN);

@@ -11,6 +11,8 @@ import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import React, { useRef, useState, useEffect } from "react";
 import apiClient from "@/lib/apiClient";
+import { UserProfile } from "@/types/user.types";
+import { INFO_USER } from "@/assets/configs/request";
 
 function base64ToFile(base64: string, filename: string): File {
   const arr = base64.split(',');
@@ -50,33 +52,97 @@ export default function SearchPage() {
         setError(null);
         
         const formData = new FormData();
-        formData.append('image', base64ToFile(searchImage, 'search_image.png'));
+        formData.append('file', base64ToFile(searchImage, 'search_image.png'));
         
-        const response = await apiClient.post('/predict', formData, {
+        const response = await apiClient.post('/search/image', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          customBaseURL: API.AI_CHUONG_BASE,
         });
 
-        const data = response.data;
-        console.log(data)
+        // const data = response.data;
 
-        const productsList = data.products ?? [];
-        setPrediction({
-          label: data.label,
-          confidence: data.confidence
+        const data_search_image:{
+          results:{
+            matched_image: string,
+            price: number,
+            product_id: string,
+            similarity: number
+          }[]
+        } = response.data
+        console.log("Search image results:", data_search_image)
+      
+        const productIds = data_search_image.results
+            .filter(item => item.similarity > 0.7)
+            .map(item => item.product_id);
+
+        if (productIds.length === 0) {
+          setProducts([]);
+          return;
+        }
+
+        // 1. Tạo query string thủ công: "product_ids=id1&product_ids=id2"
+        const queryString = productIds
+            .map(id => `product_ids=${id}`)
+            .join('&');
+
+        // 2. Gọi API (Nối trực tiếp vào URL)
+        const response_product = await apiClient.get(`/product/get_products_detail_for_search?${queryString}`, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            customBaseURL: API.base_product,
         });
+
+        console.log("response_product:", response_product.data);
+
+        // Transform data from API response to match ProductSummary interface
+        const productsData = response_product.data?.result?.data || [];
         
-        // Transform products data
-        const updatedProducts = productsList.map((product: any) => {
-          const { product_spu_id, ...rest } = product;
+        const transformedProducts = productsData.map((item: any) => {
+          // Tìm SKU có giá thấp nhất
+          const minPriceSku = item.sku?.reduce((min: any, sku: any) => 
+            sku.price < min.price ? sku : min, item.sku[0]
+          );
+          
+          // Tìm SKU có giá cao nhất
+          const maxPriceSku = item.sku?.reduce((max: any, sku: any) => 
+            sku.price > max.price ? sku : max, item.sku[0]
+          );
+
+          // Map đúng theo ProductSummary interface
           return {
-            ...rest,
-            products_spu_id: product_spu_id,
+            id: item.product.id,
+            name: item.product.name,
+            key: item.product.key,
+            image: item.product.image,
+            shop_id: '', // Không có trong response, để empty
+            brand_id: '', // Không có trong response, chỉ có brand name
+            category_id: '', // Không có trong response, chỉ có category name
+            min_price: minPriceSku?.price || 0,
+            max_price: maxPriceSku?.price || 0,
+            min_price_sku_id: minPriceSku?.id || '',
+            max_price_sku_id: maxPriceSku?.id || '',
+            description: item.product.short_description || '',
+            total_sold: 0, // Không có trong response
+            short_description: item.product.short_description || '',
+            media: null, // Không có trong response
+            product_is_permission_check: item.product.product_is_permission_check,
+            product_is_permission_return: item.product.product_is_permission_return,
+            delete_status: '', // Không có trong response
+            create_date: '', // Không có trong response
+            update_date: '', // Không có trong response
+            rating: {
+              product_id: item.product.id,
+              total_reviews: 0, // Không có trong response
+              average_rating: 0, // Không có trong response
+            }
           };
         });
 
-        setProducts(updatedProducts);
+        console.log("Transformed products:", transformedProducts);
+        setProducts(transformedProducts);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Lỗi khi tìm kiếm sản phẩm');
         console.error('Error fetching products:', err);
@@ -89,6 +155,21 @@ export default function SearchPage() {
   }, [searchImage]);
 
   const t = useTranslations("System");
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
 
   return (
     <div className="min-h-screen p-8 pb-20 font-[family-name:var(--font-geist-sans)]">
@@ -130,7 +211,7 @@ export default function SearchPage() {
         {/* Search Results */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {products.map((product, index) => (
-            <C_ProductSimple key={index} product={product}/>
+            <C_ProductSimple key={index} product={product} user_id={profile?.id} collection_type="search" />
           ))}
         </div>
 

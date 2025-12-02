@@ -28,7 +28,8 @@ func (api *apiController) getAllProductSimple() func(ctx *gin.Context) {
 		price_max_s := ctx.DefaultQuery("price_max", "-1")
 		keywords := ctx.DefaultQuery("keywords", "")
 		sort := ctx.DefaultQuery("sort", "")
-		sort_order := []string{"price_asc", "price_desc", "name_asc", "name_desc"}
+		status := ctx.DefaultQuery("status", "")
+		sort_order := []string{"price_asc", "price_desc", "name_asc", "name_desc", "best_sell"}
 		// check if sort not in sort_order
 		if sort != "" {
 			check := false
@@ -42,6 +43,24 @@ func (api *apiController) getAllProductSimple() func(ctx *gin.Context) {
 			}
 			if !check {
 				ctx.JSON(402, assets_api.ResponseError(402, "sort must be one of "+strconv.Quote(strings.Join(sort_order, ", "))))
+				return
+			}
+		}
+
+		deleteStatus := []string{"Pending", "Deleted", "Active"}
+		// check if sort not in DeleteStatus
+		if status != "" {
+			check := false
+
+			for _, v := range deleteStatus {
+				if status == v {
+					status = v
+					check = true
+					break
+				}
+			}
+			if !check {
+				ctx.JSON(402, assets_api.ResponseError(402, "status must be one of "+strconv.Quote(strings.Join(deleteStatus, ", "))))
 				return
 			}
 		}
@@ -68,7 +87,7 @@ func (api *apiController) getAllProductSimple() func(ctx *gin.Context) {
 			return
 		}
 
-		orders, err := api.service.GetAllProductSimple(ctx, services.NewQueryFilter(pageInt, pageSizeInt, nil, nil), cate_path, brand, shop_id, keywords, sort, float64(price_min), float64(price_max))
+		orders, err := api.service.GetAllProductSimple(ctx, services.NewQueryFilter(pageInt, pageSizeInt, nil, nil), cate_path, brand, shop_id, keywords, sort, float64(price_min), float64(price_max), status)
 		if err != nil {
 			ctx.JSON(err.Code, assets_api.ResponseError(err.Code, err.Error()))
 			return
@@ -177,7 +196,6 @@ func (api *apiController) updateProduct() func(ctx *gin.Context) {
 
 		// 2. Lấy thông tin user từ token
 		authPayload := ctx.MustGet(authorizationPayload).(*token.Payload)
-		token := ctx.MustGet("token").(string)
 
 		// 3. Parse multipart form
 		form, err := ctx.MultipartForm()
@@ -237,7 +255,7 @@ func (api *apiController) updateProduct() func(ctx *gin.Context) {
 		}
 
 		// 9. Gọi service để update product
-		errors := api.service.UpdateProduct(ctx, token, authPayload.Sub, productID,
+		errors := api.service.UpdateProduct(ctx, authPayload.Scope, authPayload.Sub, productID,
 			productParams, image, mediaFiles, nil)
 
 		if errors != nil {

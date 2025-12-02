@@ -82,7 +82,7 @@ func main() {
 	})
 	// config cors middleware
 	config := cors.Config{
-		AllowOrigins:     []string{env.ClientIP},                              // Chỉ cho phép localhost:3000
+		AllowOrigins:     env.ClientIP,                                        // Chỉ cho phép localhost:3000
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}, // Các method được phép
 		AllowHeaders:     []string{"Content-Type", "Origin", "Authorization"}, // Các headers được phép
 		ExposeHeaders:    []string{"Content-Length"},                          // Các headers trả về
@@ -144,11 +144,44 @@ func connectDBRedisWithRetry(times int, redisAddress string) (*redis.Client, err
 	return nil, e
 
 }
+
+//	func connectDBWithRetry(times int, dbConfig string) (*sql.DB, error) {
+//		var e error
+//		_, cancel := context.WithTimeout(context.Background(), time.Second*2*time.Duration(times))
+//		defer cancel()
+//		for i := 1; i <= times; i++ {
+//			pool, err := sql.Open("mysql", dbConfig)
+//			if err != nil {
+//				log.Err(err).Msg("Can't create database pool")
+//			}
+//			err = pool.Ping()
+//			if err != nil {
+//				log.Err(err).Msg("Can't get connection to database pool")
+//			}
+//			// defer conn.Release()
+//			pool.SetMaxOpenConns(10)                 // Số kết nối tối đa có thể mở
+//			pool.SetMaxIdleConns(1)                  // Số kết nối có thể giữ mà không bị đóng
+//			pool.SetConnMaxLifetime(5 * time.Minute) // Thời gian tối đa một kết nối có thể sống
+//			if err == nil {
+//				return pool, nil
+//			}
+//			e = err
+//			time.Sleep(time.Second * 2)
+//		}
+//		return nil, e
+//	}
 func connectDBWithRetry(times int, dbConfig string) (*sql.DB, error) {
 	var e error
 	_, cancel := context.WithTimeout(context.Background(), time.Second*2*time.Duration(times))
 	defer cancel()
 	for i := 1; i <= times; i++ {
+		// Thêm parseTime=true&loc=Asia%2FHo_Chi_Minh vào dbConfig
+		if dbConfig[len(dbConfig)-1] == '/' {
+			dbConfig += "?parseTime=true&loc=Asia%2FHo_Chi_Minh"
+		} else {
+			dbConfig += "&parseTime=true&loc=Asia%2FHo_Chi_Minh"
+		}
+
 		pool, err := sql.Open("mysql", dbConfig)
 		if err != nil {
 			log.Err(err).Msg("Can't create database pool")
@@ -157,11 +190,18 @@ func connectDBWithRetry(times int, dbConfig string) (*sql.DB, error) {
 		if err != nil {
 			log.Err(err).Msg("Can't get connection to database pool")
 		}
-		// defer conn.Release()
-		pool.SetMaxOpenConns(10)                 // Số kết nối tối đa có thể mở
-		pool.SetMaxIdleConns(1)                  // Số kết nối có thể giữ mà không bị đóng
-		pool.SetConnMaxLifetime(5 * time.Minute) // Thời gian tối đa một kết nối có thể sống
+
+		pool.SetMaxOpenConns(60)
+		pool.SetMaxIdleConns(60)
+		pool.SetConnMaxLifetime(5 * time.Minute)
+		pool.SetConnMaxIdleTime(2 * time.Minute)
+
 		if err == nil {
+			// Set timezone cho session MySQL
+			_, err = pool.Exec("SET time_zone = '+07:00'")
+			if err != nil {
+				log.Err(err).Msg("Can't set timezone")
+			}
 			return pool, nil
 		}
 		e = err

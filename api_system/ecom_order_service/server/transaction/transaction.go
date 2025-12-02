@@ -27,6 +27,9 @@ type SettlementDetail struct {
 	ShopVoucherDiscount       float64 `json:"shop_voucher_discount" `            // Voucher Shop chịu
 	ShippingFee               float64 `json:"shipping_fee" binding:"required"`   // Phí ship khách trả cho đơn này
 	ShopShippingDiscount      float64 `json:"shop_shipping_discount"`            // Ship Shop tài trợ
+	SiteOrderDiscount         float64 `json:"site_order_discount"`               // --- THÊM TRƯỜNG --- Số tiền giảm từ voucher SÀN (tiền hàng) đã được PHÂN BỔ cho đơn hàng shop này
+	SiteShippingDiscount      float64 `json:"site_shipping_discount"`            // --- THÊM TRƯỜNG --- Tiền Sàn hỗ trợ ship (voucher ship) đã được PHÂN BỔ cho đơn hàng shop này
+
 	// --- LOẠI BỎ site_shipping_discount và site_order_discount ---
 	CommissionFee    float64 `json:"commission_fee" binding:"required"`     // Phí hoa hồng Sàn tính (Order Service tính sẵn)
 	NetSettledAmount float64 `json:"net_settled_amount" binding:"required"` // Tiền Shop thực nhận (Order Service tính sẵn)
@@ -189,58 +192,3 @@ func (c TransactionServer) CreateTransaction(token string, params InitPaymentPar
 	}
 	return &initTransaction, nil
 }
-
-// func (c TransactionServer) UpdateProductSKU(token, status string, params []UpdateProductSKUParams) (*GetProductDetailResponse, error) {
-
-// 	// Tạo request
-// 	if status != "commit" && status != "hold" && status != "rollback" {
-// 		return nil, fmt.Errorf("status must be 'commit', 'hold' or 'rollback'")
-// 	}
-
-// 	url := fmt.Sprintf("%s/v1/product/update_sku_reserver", c.baseURL)
-// 	data := struct {
-// 		Status string                   `json:"status"`
-// 		Params []UpdateProductSKUParams `json:"data"`
-// 	}{
-// 		Status: status,
-// 		Params: params,
-// 	}
-// 	body, err := json.Marshal(data)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to marshal request body: %w", err)
-// 	}
-// 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to create request: %w", err)
-// 	}
-// 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-
-// 	// Gửi request
-// 	resp, err := c.httpClient.Do(req)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to send request: %w", err)
-// 	}
-// 	defer resp.Body.Close()
-
-// 	// Đọc response body
-// 	responseBody, err := io.ReadAll(resp.Body)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to read response: %w", err)
-// 	}
-
-// 	// Kiểm tra status code
-// 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-// 		return nil, fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(responseBody))
-// 	}
-
-// 	// Parse response
-// 	var result GetProductDetailResponse
-// 	err = json.Unmarshal(responseBody, &result)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to parse response: %w", err)
-// 	}
-// 	if result.Code == 400 {
-// 		return nil, fmt.Errorf("product service returned error: %s", result.Message)
-// 	}
-// 	return &result, nil
-// }

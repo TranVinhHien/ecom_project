@@ -48,6 +48,8 @@ import { useGetCategories } from '@/services/apiService';
 import { useCartStore } from '@/store/cartStore';
 import { Category } from '@/types/category.types';
 import logo from "../../../public/logo_doan.png"
+import { useGetCartCount } from '@/services/apiService';
+
 export default function Header({ onClick }: { onClick: () => void }) {
     const t = useTranslations("System")
     const locale = useLocale();
@@ -59,14 +61,19 @@ export default function Header({ onClick }: { onClick: () => void }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isHydrated, setIsHydrated] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [info, setInfo] = useState<UserLoginType | null>(null);
 
     // Sử dụng React Query để lấy categories
     const { data: categories = [], isLoading: categoriesLoading } = useGetCategories();
     
-    // Lấy số lượng sản phẩm trong giỏ hàng từ Zustand (sau khi hydrated)
-    const cartItemsCount = useCartStore((state) => state.getTotalItems());
+    // Lấy số lượng sản phẩm trong giỏ hàng
+    // Nếu đã đăng nhập: lấy từ API
+    // Nếu chưa đăng nhập: lấy từ localStorage
+    const localCartItemsCount = useCartStore((state) => state.getTotalItems());
+    const { data: apiCartCount, isLoading: apiCartLoading } = useGetCartCount();
     
-    const [info, setInfo] = useState<UserLoginType | null>(null)
+    // Determine cart count based on login status
+    const cartItemsCount = isHydrated && info ? (apiCartCount || 0) : localCartItemsCount;
 
     // Hydrate cart store
     useEffect(() => {
@@ -82,22 +89,22 @@ export default function Header({ onClick }: { onClick: () => void }) {
     }, [])
 
     const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-        // const file = event.target.files?.[0];
-        // if (file) {
-        //     const reader = new FileReader();
-        //     reader.onload = (e) => {
-        //         // const base64Image = e.target?.result as string;
-        //         // Store the image in localStorage
-        //         // localStorage.setItem('searchImage', base64Image);
-        //         // if ( pathname=== ROUTER.timkiem.image) {
-        //         //     window.location.reload();
-        //         // } else {
-        //         //     router.push(ROUTER.timkiem.image);
-        //         // }
+        const file = event.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const base64Image = e.target?.result as string;
+                // Store the image in localStorage
+                localStorage.setItem('searchImage', base64Image);
+                if ( pathname=== ROUTER.timkiem.image) {
+                    window.location.reload();
+                } else {
+                    router.push(ROUTER.timkiem.image);
+                }
     
-        // };
-        //     reader.readAsDataURL(file);
-        // }
+        };
+            reader.readAsDataURL(file);
+        }
     };
 
     // Function to check if a category is selected
@@ -262,6 +269,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                             <Link href={ROUTER.auth.login}>
                                 {t('dang-nhap')}
                             </Link>
+                            
                         </Button>
                     ) : (
                         <DropdownMenu>
@@ -275,7 +283,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                             return "/default-avatar.png";
                                         }}
                                     />
-                                    <span className="font-medium hidden lg:inline">{info.name}</span>
+                                    <span style={{"color":"white"}} className="font-medium hidden lg:inline">{info.name}</span>
                                     <ChevronDown className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -475,7 +483,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyPress={(e) => {
                                     if (e.key === 'Enter' && searchQuery.trim() !== "") {
-                                        router.push(ROUTER.timkiem.query + "?query=" + searchQuery);
+                                        router.push(ROUTER.timkiem.query + "?keywords=" + searchQuery);
                                     }
                                 }}
                             />
@@ -490,6 +498,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                 className="absolute right-12 md:right-14 top-1/2 transform -translate-y-1/2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/.9)] text-white rounded-full p-1.5 h-8 w-8 flex items-center justify-center"
                                 size="icon"
                                 onClick={() => fileInputRef.current?.click()}
+
                                 title={t('tim-kiem-bang-hinh-anh')}
                             >
                                 <Camera className="h-3 w-3 md:h-4 md:w-4" />
@@ -499,7 +508,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                 size="icon"
                                 onClick={() => {
                                     if (searchQuery.trim() !== "") {
-                                        router.push(ROUTER.timkiem.query + "?query=" + searchQuery);
+                                        router.push(ROUTER.timkiem.query + "?keywords=" + searchQuery);
                                     }
                                 }}
                             >
@@ -509,8 +518,11 @@ export default function Header({ onClick }: { onClick: () => void }) {
                     </div>
 
                     {/* Right: Actions */}
+                    
                     <div className="flex items-center gap-1 md:gap-2">
+                                  
                         {/* Desktop Settings */}
+                        
                         <DropdownMenu open={openSettings} onOpenChange={setOpenSettings}>
                             <DropdownMenuTrigger asChild className="hidden lg:flex">
                                 <Button variant="ghost" size="icon">
@@ -542,16 +554,16 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                 </DropdownMenuGroup>
                             </DropdownMenuContent>
                         </DropdownMenu>
-
+                        
                         {/* Notifications & Cart - Only show when logged in */}
                         {info && (
                             <>
-                                <Button variant="ghost" size="icon" className="relative hidden md:flex items-center justify-center">
+                                {/* <Button variant="ghost" size="icon" className="relative hidden md:flex items-center justify-center">
                                     <Bell className="h-4 w-4 lg:h-5 lg:w-5 text-[hsl(var(--primary))]" />
                                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
                                         3
                                     </span>
-                                </Button>
+                                </Button> */}
                             
                                 <Button 
                                     variant="ghost" 

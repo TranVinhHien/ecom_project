@@ -13,7 +13,8 @@ type ReadENV struct {
 	ClientIP          []string `mapstructure:"CLIENT_IP"`
 	RedisAddress      string   `mapstructure:"REDIS_ADDRESS"`
 	// // URL service
-	ImagePath string `mapstructure:"IMAGE_PATH"`
+	ImagePath         string `mapstructure:"IMAGE_PATH"`
+	OrderServiceURL   string `mapstructure:"ORDER_SERVICE_URL"`
 }
 
 func LoadConfig(path string) (config ReadENV, err error) {

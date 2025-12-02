@@ -61,6 +61,7 @@ class TokenRefreshService {
       
       if (!token) {
         console.log('⚠️ No token found, skipping refresh schedule');
+        
         return;
       }
 

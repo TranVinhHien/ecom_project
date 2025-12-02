@@ -5,21 +5,33 @@ export interface OrderItemPayload {
   quantity: number;
 }
 
+export interface VoucherShopRequest {
+  voucher_id: string;
+  shop_id: string;
+}
+
 export interface ShippingAddress {
   fullName: string;
   phone: string;
   address: string;
-  district: string;
-  city: string;
-  postalCode: string;
+  ward?: string;
+  district?: string;
+  wardId?: string;
+  districtId?: string;
+  provinceId?: string;
+  city?: string;
+  postalCode?: string;
 }
 
 export interface CreateOrderPayload {
   shippingAddress: ShippingAddress;
   paymentMethod: string; // UUID của payment method (COD, MoMo, etc.)
   items: OrderItemPayload[];
-  vouchers: string[]; // Array of voucher codes
-  note: string; // Ghi chú đơn hàng
+  note?: string; // Ghi chú đơn hàng (optional)
+  voucher_shop?: VoucherShopRequest[]; // Vouchers của shop
+  voucher_site_id?: string; // Voucher sàn giảm giá đơn hàng
+  voucher_shipping_id?: string; // Voucher sàn freeship
+  sku_in_cart?: string[]; // Danh sách SKU trong giỏ hàng (nếu có)
 }
 
 export interface CreateOrderSuccessResponse {
@@ -41,7 +53,7 @@ export type OrderStatus =
   | 'PROCESSING' 
   | 'SHIPPED' 
   | 'COMPLETED' 
-  | 'CANCELED' 
+  | 'CANCELLED' 
   | 'REFUNDED';
 
 export interface OrderItem {
@@ -69,6 +81,8 @@ export interface ShopOrder {
   total_amount: number;
   shop_voucher_code: string;
   shop_voucher_discount: number;
+  site_order_discount: number; // New field
+  site_shipping_discount: number; // New field
   shipping_method: string;
   tracking_code: string;
   items: OrderItem[];
@@ -87,14 +101,20 @@ export interface OrderListParams {
   status?: OrderStatus;
 }
 
+// New API structure - Nested order with shop order
+export interface OrderWithShop {
+  order: OrderDetail;
+  order_shop: ShopOrder;
+}
+
 export interface OrderListResponse {
   code: number;
   message: string;
   status: string;
   result: {
     currentPage: number;
-    data: ShopOrder[];
-    limit: number;
+    data: OrderWithShop[];
+    pageSize: number;
     totalElements: number;
     totalPages: number;
   };
@@ -123,6 +143,8 @@ export interface OrderDetail {
   note: string;
   created_at: string;
   updated_at: string;
+  site_order_voucher_code: string;
+  site_shipping_voucher_code: number;
   paid_at: string | null;
   processing_at: string | null;
   shipped_at: string | null;

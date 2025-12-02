@@ -25,7 +25,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 	categories := group.Group("/categories")
 	{
 		categories.GET("/get", api.listCategories())
-		categories_auth := categories.Group("").Use(authorization(api.jwt)).Use(checkRole("ADMIN"))
+		categories_auth := categories.Group("").Use(authorization(api.jwt)).Use(checkRole([]string{"ROLE_ADMIN"}))
 		{
 			categories_auth.POST("/create", api.createCategories())
 			categories_auth.PUT("/update", api.updateCategories())
@@ -40,7 +40,7 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 		product.GET("/getallproductid", api.getAllProductID())
 		product.GET("/get_products_detail_for_search", api.getListProductWithIDs())
 		// chỉ cho phép shop mới được tạo/sửa sản phẩm
-		product_auth := product.Group("").Use(authorization(api.jwt)).Use(checkRole("SELLER"))
+		product_auth := product.Group("").Use(authorization(api.jwt)).Use(checkRole([]string{"ROLE_SELLER", "ROLE_ADMIN"}))
 		{
 			product_auth.POST("/create", api.createProduct())
 			product_auth.PUT("/update/:id", api.updateProduct())
@@ -51,6 +51,14 @@ func (api apiController) SetUpRoute(group *gin.RouterGroup) {
 		product.GET("/getsku/:id", api.getSKUProduct())
 		product.GET("/getdetail_with_id/:id", api.getProductWithID())
 	}
-	// group.GET("/.well-known/assetlinks.json", api.renderAndroid())
-	group.GET("/media/:id", api.renderURLLocal())
+	media := group.Group("/media")
+	{
+		media.GET("/:id", api.renderURLLocal())
+		media_auth := media.Group("").Use(authorization(api.jwt))
+		{
+			media_auth.POST("", api.uploadMultiMedia())
+			media_auth.DELETE("", api.deleteMultiImage())
+		}
+	}
+
 }

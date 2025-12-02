@@ -2,19 +2,48 @@
 
 import C_ProductSimple from "@/resources/components_thuongdung/product";
 import { useTranslations } from "next-intl";
-import React from "react";
-import { useGetProducts } from "@/services/apiService";
+import React, { useEffect, useState } from "react";
+import { useGetActiveBanners, useGetProducts } from "@/services/apiService";
 import { ProductSummary } from "@/types/product.types";
+import { UserProfile } from "@/types/user.types";
+import { INFO_USER } from "@/assets/configs/request";
+import { event_type } from "@/types/collection.types";
+import PersonalizedRecommendations from "@/components/PersonalizedRecommendations";
+import HomeBannerSlider from "@/components/HomeBannerSlider";
 
 export default function Home() {
   const t = useTranslations("System");
-  
   // Sử dụng hook useGetProducts giống các trang khác
   const { data, isLoading, error } = useGetProducts({
     page: 1,
-    limit: 60,
-    price_min:60000
+    limit: 20,
+    // price_min:60000,
+    sort:'best_sell',
+    cate_path:'/laptop-may-vi-tinh-linh-kien'
   });
+
+  const { data: data_cham_soc_nha_cua } = useGetProducts({
+    page: 1,
+    limit: 20,
+    // price_min:60000,
+    sort:'best_sell',
+    cate_path:'/cham-soc-nha-cua'
+  });
+  const { data: homeBanners } = useGetActiveBanners('HOME');
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
 
   if (isLoading) return (
     <div className="flex justify-center items-center min-h-screen">
@@ -30,13 +59,20 @@ export default function Home() {
 
   const products = data?.data || [];
 
+
   return (
     <div className="pt-36">
-      <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-        <div className="mb-64" />
-        <TopSearchSection items={products} t={t} />
-        <div className="mb-8" />
-        <HomeSuggestion products={products} t={t} />
+      <HomeBannerSlider banners={homeBanners || []}   height="h-[400px] md:h-[500px]" />
+      <div className="container mx-auto px-4 md:px-8 lg:px-16 py-8">
+        {profile?.id && (
+          <PersonalizedRecommendations 
+            userId={profile.id} 
+            title="Gợi ý dành riêng cho bạn" 
+            limit={25}
+          />
+        )}
+        <HomeSuggestion products={products} user_id={profile?.id || ""} title="Bán chạy nhất điện tử" t={t} collection_type="click" />
+        <HomeSuggestion products={data_cham_soc_nha_cua?.data || []} user_id={profile?.id || ""} title="Chăm sóc nhà cửa" t={t} collection_type="click" />
       </div>
     </div>
   );
@@ -87,55 +123,18 @@ function TopSearchSection({ items, t }: { items: ProductSummary[], t: any }) {
   );
 }
 
-function HomeSuggestion({ products, t }: { products: ProductSummary[], t: any }) {
+function HomeSuggestion({ products, title, t,user_id,collection_type }: { products: ProductSummary[], title: string, t: any, user_id: string, collection_type: event_type }) {
+ 
   return (
-    <div className="w-full px-4 md:px-0">
-      <section className="bg-[#f5f5f5] py-4 px-4 md:px-6 rounded-lg mb-8 w-full">
-        <div className="flex items-center border-b-2 border-[#ee4d2d] pb-2 mb-4">
-          <span className="text-base md:text-lg font-bold text-[#ee4d2d] uppercase tracking-wider">{t("goi_y_hom_nay")}</span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
-          {products.length > 0 && products?.map(product => (
-            <C_ProductSimple key={product.id} product={product} />
-          ))}
-        </div>
-      </section>
-    </div>
+    <section className="bg-[#f5f5f5] py-4 px-4 md:px-6 rounded-lg mb-8 w-full">
+      <div className="flex items-center border-b-2 border-[#ee4d2d] pb-2 mb-4">
+        <span className="text-base md:text-lg font-bold text-[#ee4d2d] uppercase tracking-wider">{title}</span>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {products.length > 0 && products?.map(product => (
+          <C_ProductSimple key={product.id} product={product} collection_type={collection_type} user_id={user_id} />
+        ))}
+      </div>
+    </section>
   );
 }
-
-// // Helper function để tạo media URL từ API Gateway
-// const getMediaUrl = (imageId: string) => {
-//   const baseURL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:9001';
-//   return `${baseURL}/media/products?id=${imageId}`;
-// };
-
-
-  //  function CategorySection({t}:{t:any}) {
-  //   return (
-  //        <div className="w-full">
-  //   <section className="bg-[#f5f5f5] py-6 px-6 rounded-lg mb-6">
-  //   <div className="text-2xl font-semibold mb-4 text-gray-700">{t("danh_muc")}</div>
-  //   <div className="grid grid-cols-10 gap-y-8 gap-x-0 bg-white rounded-lg overflow-hidden border">
-  //     {categories.map((cat, idx) => (
-  //       <div
-  //         key={cat.name}
-  //         className="flex flex-col items-center justify-center py-6 border-r border-b last:border-r-0"
-  //         style={{
-  //           borderRight: (idx + 1) % 10 === 0 ? "none" : undefined,
-  //           borderBottom: idx >= 10 ? "none" : undefined,
-  //         }}
-  //       >
-  //         <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-2">
-  //           <img src={cat.image} alt={cat.name} className="w-12 h-12 object-contain" style={{ borderRadius: '50%' }}/>
-  //         </div>
-  //         <div className="text-center text-sm text-gray-700 font-medium w-24 truncate">
-  //           {cat.name}
-  //         </div>
-  //       </div>
-  //     ))}
-  //   </div>
-  // </section>
-  //     </div>
-//     );
-  // }

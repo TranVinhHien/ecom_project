@@ -221,3 +221,155 @@ WHERE
     voucher_id = ?
     AND user_id = ?
     AND status = 'USED';
+
+-- =============================================
+-- CÁC HÀM QUẢN LÝ CHO ADMIN/SELLER
+-- =============================================
+
+-- name: CountVouchersForManagement :one
+-- Đếm tổng số voucher theo owner với filters
+SELECT COUNT(*) as total
+FROM vouchers
+WHERE
+    owner_id = sqlc.arg(owner_id)
+    AND owner_type = sqlc.arg(owner_type)
+    AND (sqlc.narg('voucher_code') IS NULL OR voucher_code LIKE sqlc.narg('voucher_code'))
+    AND (sqlc.narg('name') IS NULL OR name LIKE sqlc.narg('name'))
+    AND (sqlc.narg('discount_type') IS NULL OR discount_type = sqlc.narg('discount_type'))
+    AND (sqlc.narg('applies_to_type') IS NULL OR applies_to_type = sqlc.narg('applies_to_type'))
+    AND (sqlc.narg('audience_type') IS NULL OR audience_type = sqlc.narg('audience_type'))
+    AND (sqlc.narg('is_active') IS NULL OR is_active = sqlc.narg('is_active'))
+    AND (
+        sqlc.narg('status') IS NULL
+        OR (sqlc.narg('status') = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (sqlc.narg('status') = 'EXPIRED' AND end_date < NOW())
+        OR (sqlc.narg('status') = 'UPCOMING' AND start_date > NOW())
+        OR (sqlc.narg('status') = 'DEPLETED' AND used_quantity >= total_quantity)
+    );
+
+-- name: ListVouchersForManagementBySortCreatedAtDesc :many
+-- Lấy danh sách voucher cho admin/seller - Sắp xếp theo created_at DESC
+SELECT * FROM vouchers
+WHERE
+    owner_id = sqlc.arg(owner_id)
+    AND owner_type = sqlc.arg(owner_type)
+    AND (sqlc.narg('voucher_code') IS NULL OR voucher_code LIKE sqlc.narg('voucher_code'))
+    AND (sqlc.narg('name') IS NULL OR name LIKE sqlc.narg('name'))
+    AND (sqlc.narg('discount_type') IS NULL OR discount_type = sqlc.narg('discount_type'))
+    AND (sqlc.narg('applies_to_type') IS NULL OR applies_to_type = sqlc.narg('applies_to_type'))
+    AND (sqlc.narg('audience_type') IS NULL OR audience_type = sqlc.narg('audience_type'))
+    AND (sqlc.narg('is_active') IS NULL OR is_active = sqlc.narg('is_active'))
+    AND (
+        sqlc.narg('status') IS NULL
+        OR (sqlc.narg('status') = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (sqlc.narg('status') = 'EXPIRED' AND end_date < NOW())
+        OR (sqlc.narg('status') = 'UPCOMING' AND start_date > NOW())
+        OR (sqlc.narg('status') = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: ListVouchersForManagementBySortCreatedAtAsc :many
+SELECT * FROM vouchers
+WHERE
+    owner_id = sqlc.arg(owner_id)
+    AND owner_type = sqlc.arg(owner_type)
+    AND (sqlc.narg('voucher_code') IS NULL OR voucher_code LIKE sqlc.narg('voucher_code'))
+    AND (sqlc.narg('name') IS NULL OR name LIKE sqlc.narg('name'))
+    AND (sqlc.narg('discount_type') IS NULL OR discount_type = sqlc.narg('discount_type'))
+    AND (sqlc.narg('applies_to_type') IS NULL OR applies_to_type = sqlc.narg('applies_to_type'))
+    AND (sqlc.narg('audience_type') IS NULL OR audience_type = sqlc.narg('audience_type'))
+    AND (sqlc.narg('is_active') IS NULL OR is_active = sqlc.narg('is_active'))
+    AND (
+        sqlc.narg('status') IS NULL
+        OR (sqlc.narg('status') = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (sqlc.narg('status') = 'EXPIRED' AND end_date < NOW())
+        OR (sqlc.narg('status') = 'UPCOMING' AND start_date > NOW())
+        OR (sqlc.narg('status') = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY created_at ASC
+LIMIT ? OFFSET ?;
+
+-- name: ListVouchersForManagementBySortStartDateDesc :many
+SELECT * FROM vouchers
+WHERE
+    owner_id = sqlc.arg(owner_id)
+    AND owner_type = sqlc.arg(owner_type)
+    AND (sqlc.narg('voucher_code') IS NULL OR voucher_code LIKE sqlc.narg('voucher_code'))
+    AND (sqlc.narg('name') IS NULL OR name LIKE sqlc.narg('name'))
+    AND (sqlc.narg('discount_type') IS NULL OR discount_type = sqlc.narg('discount_type'))
+    AND (sqlc.narg('applies_to_type') IS NULL OR applies_to_type = sqlc.narg('applies_to_type'))
+    AND (sqlc.narg('audience_type') IS NULL OR audience_type = sqlc.narg('audience_type'))
+    AND (sqlc.narg('is_active') IS NULL OR is_active = sqlc.narg('is_active'))
+    AND (
+        sqlc.narg('status') IS NULL
+        OR (sqlc.narg('status') = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (sqlc.narg('status') = 'EXPIRED' AND end_date < NOW())
+        OR (sqlc.narg('status') = 'UPCOMING' AND start_date > NOW())
+        OR (sqlc.narg('status') = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY start_date DESC
+LIMIT ? OFFSET ?;
+
+-- name: ListVouchersForManagementBySortStartDateAsc :many
+SELECT * FROM vouchers
+WHERE
+    owner_id = sqlc.arg(owner_id)
+    AND owner_type = sqlc.arg(owner_type)
+    AND (sqlc.narg('voucher_code') IS NULL OR voucher_code LIKE sqlc.narg('voucher_code'))
+    AND (sqlc.narg('name') IS NULL OR name LIKE sqlc.narg('name'))
+    AND (sqlc.narg('discount_type') IS NULL OR discount_type = sqlc.narg('discount_type'))
+    AND (sqlc.narg('applies_to_type') IS NULL OR applies_to_type = sqlc.narg('applies_to_type'))
+    AND (sqlc.narg('audience_type') IS NULL OR audience_type = sqlc.narg('audience_type'))
+    AND (sqlc.narg('is_active') IS NULL OR is_active = sqlc.narg('is_active'))
+    AND (
+        sqlc.narg('status') IS NULL
+        OR (sqlc.narg('status') = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (sqlc.narg('status') = 'EXPIRED' AND end_date < NOW())
+        OR (sqlc.narg('status') = 'UPCOMING' AND start_date > NOW())
+        OR (sqlc.narg('status') = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY start_date ASC
+LIMIT ? OFFSET ?;
+
+-- name: ListVouchersForManagementBySortEndDateDesc :many
+SELECT * FROM vouchers
+WHERE
+    owner_id = sqlc.arg(owner_id)
+    AND owner_type = sqlc.arg(owner_type)
+    AND (sqlc.narg('voucher_code') IS NULL OR voucher_code LIKE sqlc.narg('voucher_code'))
+    AND (sqlc.narg('name') IS NULL OR name LIKE sqlc.narg('name'))
+    AND (sqlc.narg('discount_type') IS NULL OR discount_type = sqlc.narg('discount_type'))
+    AND (sqlc.narg('applies_to_type') IS NULL OR applies_to_type = sqlc.narg('applies_to_type'))
+    AND (sqlc.narg('audience_type') IS NULL OR audience_type = sqlc.narg('audience_type'))
+    AND (sqlc.narg('is_active') IS NULL OR is_active = sqlc.narg('is_active'))
+    AND (
+        sqlc.narg('status') IS NULL
+        OR (sqlc.narg('status') = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (sqlc.narg('status') = 'EXPIRED' AND end_date < NOW())
+        OR (sqlc.narg('status') = 'UPCOMING' AND start_date > NOW())
+        OR (sqlc.narg('status') = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY end_date DESC
+LIMIT ? OFFSET ?;
+
+-- name: ListVouchersForManagementBySortEndDateAsc :many
+SELECT * FROM vouchers
+WHERE
+    owner_id = sqlc.arg(owner_id)
+    AND owner_type = sqlc.arg(owner_type)
+    AND (sqlc.narg('voucher_code') IS NULL OR voucher_code LIKE sqlc.narg('voucher_code'))
+    AND (sqlc.narg('name') IS NULL OR name LIKE sqlc.narg('name'))
+    AND (sqlc.narg('discount_type') IS NULL OR discount_type = sqlc.narg('discount_type'))
+    AND (sqlc.narg('applies_to_type') IS NULL OR applies_to_type = sqlc.narg('applies_to_type'))
+    AND (sqlc.narg('audience_type') IS NULL OR audience_type = sqlc.narg('audience_type'))
+    AND (sqlc.narg('is_active') IS NULL OR is_active = sqlc.narg('is_active'))
+    AND (
+        sqlc.narg('status') IS NULL
+        OR (sqlc.narg('status') = 'ACTIVE' AND is_active = 1 AND start_date <= NOW() AND end_date >= NOW() AND used_quantity < total_quantity)
+        OR (sqlc.narg('status') = 'EXPIRED' AND end_date < NOW())
+        OR (sqlc.narg('status') = 'UPCOMING' AND start_date > NOW())
+        OR (sqlc.narg('status') = 'DEPLETED' AND used_quantity >= total_quantity)
+    )
+ORDER BY end_date ASC
+LIMIT ? OFFSET ?;

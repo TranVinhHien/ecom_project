@@ -2,6 +2,9 @@
 # filepath: /home/hienlazada123/project-ecom/ecom_analytics_service/docker-run.sh
 set -e
 
+# Get absolute directory path
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Màu sắc cho output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -28,35 +31,10 @@ echo -e "${GREEN}✓ Cleanup completed${NC}\n"
 
 # Load biến môi trường từ file .env.docker
 echo -e "${YELLOW}[3/4] Loading environment variables from .env.docker...${NC}"
-if [ ! -f .env.docker ]; then
+if [ ! -f "${SCRIPT_DIR}/.env.docker" ]; then
     echo -e "${RED}✗ File .env.docker không tồn tại!${NC}"
-    echo -e "${YELLOW}Tạo file .env.docker với nội dung mẫu...${NC}"
-    cat > .env.docker << 'EOF'
-# ============================================
-# ECOMMERCE ANALYTICS SERVICE - DOCKER ENV CONFIG
-# ============================================
-
-# Database Configuration (3 databases)
-DB_SOURCE_ORDER=root:12345@tcp(172.26.127.95:3306)/ecommerce_order_db?parseTime=true
-DB_SOURCE_TRANSACTION=root:12345@tcp(172.26.127.95:3306)/ecommerce_transacion_db?parseTime=true
-DB_SOURCE_INTERACT=root:12345@tcp(172.26.127.95:3306)/ecommerce_interact_db?parseTime=true
-
-# Server Configuration
-HTTP_SERVER_ADDRESS=0.0.0.0:9004
-
-# JWT Configuration
-JWT_SECRET=bv-T"-u6@-WR?SHiHQ7yQ]CK*dd9(@jM9BI)|g;zq)ur-Z.Jw/u5HyJHgg,KS.fa
-
-# Client Configuration (Multiple origins)
-CLIENT_IP=http://localhost:9999,http://localhost:8989
-
-# Redis Configuration
-REDIS_ADDRESS=172.26.127.95:6379
-
-# System Token (for internal service communication)
-TOKEN_SYSTEM=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJoaWVubGF6YWRhIiwic2NvcGUiOiJTWVNURU0iLCJpc3MiOiJsZW1hcmNoZW5vYmxlLmlkLnZuIiwiZXhwIjo0OTE3NTExMjUyLCJpYXQiOjE3NjE3NTEyNTIsInVzZXJJZCI6IjE2NzQwOGUzLWFmZWYtNDhiOS04ZTRmLTZkZDQxZWJmMzQ2NCIsImp0aSI6ImU2YzgyN2E2LTIyOTYtNGNlOC1iMjQ1LWM3MDIxNWM4MGJjNyIsImVtYWlsIjoidmluaGhpZW4xMnpAZ21haWwuY29tIn0.CPnP_NqB_WtaQb9X43YKFav8wYzdqB14jFNtnPr74as
-EOF
-    echo -e "${GREEN}✓ File .env.docker đã được tạo${NC}"
+    echo -e "${YELLOW}Tạo .env.docker hoặc cung cấp file trước khi chạy.${NC}"
+    exit 1
 fi
 echo -e "${GREEN}✓ Environment variables loaded${NC}\n"
 
@@ -91,7 +69,7 @@ sudo docker ps --filter "name=${CONTAINER_NAME}" --format "table {{.Names}}\t{{.
 echo -e "\n${BLUE}=== Service Dependencies ===${NC}"
 echo -e "${GREEN}MySQL Databases:${NC}"
 echo -e "  - Order DB: 172.26.127.95:3306/ecommerce_order_db"
-echo -e "  - Transaction DB: 172.26.127.95:3306/ecommerce_transacion_db"
+echo -e "  - Transaction DB: 172.26.127.95:3306/ecommerce_transaction_db"
 echo -e "  - Interact DB: 172.26.127.95:3306/ecommerce_interact_db"
 echo -e "${GREEN}Redis:${NC} 172.26.127.95:6379"
 echo -e "${GREEN}Allowed Origins:${NC} http://localhost:9999, http://localhost:8989"

@@ -266,7 +266,7 @@ func (c ProductServer) UpdateProductSKU(token, status string, params []UpdatePro
 
 	// Tạo request
 	if status != "commit" && status != "hold" && status != "rollback" {
-		return nil, fmt.Errorf("status must be 'commit', 'hold' or 'rollback'")
+		return nil, fmt.Errorf("trạng thái phải là 'commit', 'hold' hoặc 'rollback'")
 	}
 
 	url := fmt.Sprintf("%s/v1/product/update_sku_reserver", c.baseURL)
@@ -279,40 +279,39 @@ func (c ProductServer) UpdateProductSKU(token, status string, params []UpdatePro
 	}
 	body, err := json.Marshal(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, fmt.Errorf("lỗi khi marshal dữ liệu: %w", err)
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("lỗi khi tạo request: %w", err)
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 
 	// Gửi request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("lỗi khi gửi request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Đọc response body
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("lỗi khi đọc response: %w", err)
 	}
-
-	// Kiểm tra status code
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(responseBody))
-	}
-
 	// Parse response
 	var result GetProductDetailResponse
 	err = json.Unmarshal(responseBody, &result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf(" lỗi khi parse response: %w", err)
 	}
+	// Kiểm tra status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("lỗi khi upload với status %d: %s", result.Code, result.Message)
+	}
+
 	if result.Code == 400 {
-		return nil, fmt.Errorf("product service returned error: %s", result.Message)
+		return nil, fmt.Errorf("lỗi: %s", result.Message)
 	}
 	return &result, nil
 }

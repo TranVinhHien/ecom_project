@@ -10,14 +10,15 @@ import (
 )
 
 type service struct {
-	transaction db_transaction.StoreTransaction
-	order       db_order.StoreOrder
-	interact    db_interact.StoreInteract
-	jwt         token.Maker
-	env         config_assets.ReadENV
-	apiServer   server.ApiServer
+	transaction    db_transaction.StoreTransaction
+	order          db_order.StoreOrder
+	interact       db_interact.StoreInteract
+	db_agent_ai_db db_interact.StoreAgentAIDB
+	jwt            token.Maker
+	env            config_assets.ReadENV
+	apiServer      server.ApiServer
 }
 
-func NewService(order db_order.StoreOrder, transaction db_transaction.StoreTransaction, interact db_interact.StoreInteract, jwt token.Maker, env config_assets.ReadENV, apiServer server.ApiServer) ServiceUseCase {
-	return &service{order: order, transaction: transaction, interact: interact, jwt: jwt, env: env, apiServer: apiServer}
+func NewService(order db_order.StoreOrder, transaction db_transaction.StoreTransaction, interact db_interact.StoreInteract, db_agent_ai_db db_interact.StoreAgentAIDB, jwt token.Maker, env config_assets.ReadENV, apiServer server.ApiServer) ServiceUseCase {
+	return &service{order: order, transaction: transaction, interact: interact, db_agent_ai_db: db_agent_ai_db, jwt: jwt, env: env, apiServer: apiServer}
 }

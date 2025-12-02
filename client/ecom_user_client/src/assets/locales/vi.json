@@ -1,5 +1,6 @@
 {
-  "System": {
+  "System": { 
+    "ban_chay_nhat_dien_tu":"Thiết bị điện tử bán chạy nhất",
     "khieu-nai":"Khiếu nại",
     "tim-kiem-bang-hinh-anh":"Tìm kiếm bằng hình ảnh",
     "tai-khoan-cua-toi":"Tài khoản của tôi",
@@ -42,6 +43,13 @@
     "san_pham_chinh_hang":"Sản phẩm chính hãng",
     "doi_tra_trong_7_ngay":"Đổi trả trong 7 ngày",
     "mo_ta_san_pham":"Mô tả sản phẩm",
+    "goi_y_tu_ai":"Gợi ý từ AI",
+    "danh_gia_san_pham":"Đánh giá sản phẩm",
+    "chua_co_danh_gia_nao":"Chưa có đánh giá nào",
+    "phan_loai":"Phân loại",
+    "xem_them":"Xem thêm",
+    "an_bot":"Ẩn bớt",
+    "dong_lai":"Đóng lại",
     "vui_long_nhap_tu_khoa_tim_kiem":"Vui lòng nhập từ khóa tìm kiếm",
     "khuyen-mai":"Khuyến mãi",
     "san-pham-moi":"Sản phẩm mới",

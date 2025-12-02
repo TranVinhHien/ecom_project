@@ -1,18 +1,15 @@
 """
 Tool to fetch product data and index into vector search API.
-
-This script:
-1. Fetches all product IDs from the product service
-2. For each product ID, builds a search string
-3. Indexes each product into the local vector search API
+Optimized with Multi-threading using ThreadPoolExecutor.
 """
 
 import requests
 import time
-from typing import List, Dict, Any
+import threading
+from typing import List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-
-# API endpoints
+# --- CẤU HÌNH ---
 PRODUCT_API_BASE = "http://172.26.127.95:9001/v1/product"
 VECTOR_API_BASE = "http://localhost:9101"
 
@@ -20,9 +17,13 @@ GET_ALL_PRODUCTS_URL = f"{PRODUCT_API_BASE}/getallproductid"
 BUILD_SEARCH_STRING_URL = f"{PRODUCT_API_BASE}/build_search_string"
 ADD_DOCUMENT_URL = f"{VECTOR_API_BASE}/documents"
 
+MAX_WORKERS = 15  # Số luồng chạy song song (bạn có thể tăng/giảm tùy ý)
+print_lock = threading.Lock()  # Khóa để in log không bị lỗi hiển thị khi chạy song song
+
+# --- CÁC HÀM API ---
 
 def fetch_all_product_ids() -> List[str]:
-    """Fetch all product IDs from the product service."""
+    """Lấy danh sách tất cả Product ID."""
     print("[INFO] Fetching all product IDs...")
     try:
         response = requests.get(GET_ALL_PRODUCTS_URL, timeout=30)
@@ -42,7 +43,7 @@ def fetch_all_product_ids() -> List[str]:
 
 
 def build_search_string(product_id: str) -> str:
-    """Build search string for a specific product ID."""
+    """Gọi API để tạo chuỗi search string cho 1 sản phẩm."""
     url = f"{BUILD_SEARCH_STRING_URL}/{product_id}"
     try:
         response = requests.get(url, timeout=30)
@@ -50,21 +51,23 @@ def build_search_string(product_id: str) -> str:
         data = response.json()
         
         if data.get("code") == 200 and data.get("status") == "success":
-            search_string = data.get("result", {}).get("search_string", "")
-            return search_string
+            return data.get("result", {}).get("search_string", "")
         else:
-            print(f"[WARNING] Failed to build search string for {product_id}: {data.get('message')}")
+            with print_lock:
+                print(f"[WARNING] Failed to build search string for {product_id}: {data.get('message')}")
             return ""
     except Exception as e:
-        print(f"[ERROR] Exception while building search string for {product_id}: {e}")
+        with print_lock:
+            print(f"[ERROR] Exception while building search string for {product_id}: {e}")
         return ""
 
 
 def index_document(doc_id: str, text_content: str) -> bool:
-    """Index a document into the vector search API."""
+    """Gọi API để index dữ liệu vào Vector DB."""
     payload = {
         "doc_id": doc_id,
-        "text_content": text_content
+        "text_content": text_content,
+        "doc_type":"product"
     }
     
     try:
@@ -75,60 +78,83 @@ def index_document(doc_id: str, text_content: str) -> bool:
         if data.get("status") == "success":
             return True
         else:
-            print(f"[WARNING] Failed to index document {doc_id}: {data}")
+            with print_lock:
+                print(f"[WARNING] Failed to index document {doc_id}: {data}")
             return False
     except Exception as e:
-        print(f"[ERROR] Exception while indexing document {doc_id}: {e}")
+        with print_lock:
+            print(f"[ERROR] Exception while indexing document {doc_id}: {e}")
         return False
 
 
+def process_single_product(product_id: str) -> bool:
+    """
+    Hàm xử lý cho 1 sản phẩm (sẽ được chạy bởi 1 luồng riêng biệt).
+    Luồng xử lý: Lấy chuỗi search -> Index
+    """
+    # 1. Build search string
+    search_string = build_search_string(product_id)
+    
+    if not search_string:
+        with print_lock:
+            print(f"  [SKIP] {product_id}: Empty search string")
+        return False
+    
+    # 2. Index into vector API
+    if index_document(product_id, search_string):
+        with print_lock:
+            print(f"  [SUCCESS] {product_id} (Len: {len(search_string)})")
+        return True
+    else:
+        with print_lock:
+            print(f"  [FAILED] {product_id}: Could not index")
+        return False
+
+
+# --- HÀM MAIN ---
+
 def main():
-    """Main execution flow."""
     print("=" * 80)
-    print("Starting Product Indexing Tool")
+    print(f"Starting Product Indexing Tool (Multi-threaded: {MAX_WORKERS} workers)")
     print("=" * 80)
     
-    # Step 1: Fetch all product IDs
-    product_ids =fetch_all_product_ids()
+    # B1: Lấy danh sách ID
+    product_ids = fetch_all_product_ids()
     
     if not product_ids:
         print("[ERROR] No product IDs found. Exiting.")
         return
     
-    # Step 2 & 3: For each product, build search string and index
     total = len(product_ids)
     success_count = 0
     failed_count = 0
     
     print(f"\n[INFO] Starting to process {total} products...\n")
     
-    for idx, product_id in enumerate(product_ids, 1):
-        print(f"[{idx}/{total}] Processing product: {product_id}")
+    # B2: Sử dụng ThreadPoolExecutor để chạy song song
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        # Submit các task vào pool
+        future_to_pid = {executor.submit(process_single_product, pid): pid for pid in product_ids}
         
-        # Build search string
-        search_string = build_search_string(product_id)
-        
-        if not search_string:
-            print(f"  └─ [SKIP] Empty search string for {product_id}")
-            failed_count += 1
-            continue
-        
-        print(f"  └─ [OK] Search string length: {len(search_string)} characters")
-        
-        # Index into vector API
-        if index_document(product_id, search_string):
-            print(f"  └─ [SUCCESS] Indexed product {product_id}")
-            success_count += 1
-        else:
-            print(f"  └─ [FAILED] Could not index product {product_id}")
-            failed_count += 1
-        
-        # Small delay to avoid overwhelming the APIs
-        time.sleep(0.1)
-        print()
-    
-    # Summary
-    print("=" * 80)
+        # Nhận kết quả khi từng task hoàn thành
+        for i, future in enumerate(as_completed(future_to_pid), 1):
+            try:
+                result = future.result()
+                if result:
+                    success_count += 1
+                else:
+                    failed_count += 1
+                
+                # In thông báo tiến độ mỗi khi xong 10 sản phẩm
+                if i % 10 == 0 or i == total:
+                    print(f"--- Progress: {i}/{total} completed ---")
+                    
+            except Exception as exc:
+                print(f"[CRITICAL ERROR] Thread exception: {exc}")
+                failed_count += 1
+
+    # Tổng kết
+    print("\n" + "=" * 80)
     print("Indexing Summary")
     print("=" * 80)
     print(f"Total products: {total}")

@@ -151,7 +151,7 @@ LOG_DIR = os.getenv("LOG_DIR", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 import csv
 
-async def call_agent_async(runner: Runner, user_id: str, session_id: str, query: str, token: str):
+async def call_agent_async(runner: Runner, user_id: str, session_id: str, query: str, token: str,product_key: str=None):
     """Call the agent asynchronously with the user's query and log all processing information."""
     # Khởi tạo thông tin log
     start_time = datetime.now()
@@ -166,8 +166,10 @@ async def call_agent_async(runner: Runner, user_id: str, session_id: str, query:
         "success": False,
         "error": None
     }
-    
-    content = types.Content(role="user", parts=[types.Part(text=query)])
+    cauhoi = query
+    if product_key:
+        cauhoi += f". Đây là  Product_key: {product_key}"
+    content = types.Content(role="user", parts=[types.Part(text=cauhoi)])
     print(
         f"\n{Colors.BG_GREEN}{Colors.BLACK}{Colors.BOLD}--- Running Query: {query} ---{Colors.RESET}"
     )
@@ -176,7 +178,8 @@ async def call_agent_async(runner: Runner, user_id: str, session_id: str, query:
     state_delta: dict[str, str] = {
         "token": token,
         "user_id": user_id,
-        "session_id": session_id
+        "session_id": session_id,
+        "product_key": product_key
     }
     
     try:

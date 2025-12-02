@@ -6,11 +6,14 @@ from pydantic import BaseModel, Field
 
 class DocumentIn(BaseModel):
     doc_id: str = Field(..., min_length=1)
+    doc_type: str = Field(..., min_length=1, description="product or policy")
     text_content: str = Field(..., min_length=1)
 
 
 class DocumentUpdate(BaseModel):
     text_content: str = Field(..., min_length=1)
+    doc_type: str = Field(..., min_length=1, description="product or policy")
+
 
 
 class DocumentResponse(BaseModel):

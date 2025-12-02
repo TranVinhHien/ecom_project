@@ -6,9 +6,10 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     EMBEDDING_MODEL_NAME: str = "dangvantuan/vietnamese-document-embedding"
     VECTOR_DIM: int = 768
-    INDEX_NAME: str = "document_index"
+    INDEX_PRODUCT: str = "document_index"
+    INDEX_POLICY: str = "policy_index"
     DOC_PREFIX: str = "product:"
-
+    POLICY_PREFIX: str = "policy:"
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

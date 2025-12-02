@@ -168,7 +168,7 @@ class RAGAgent:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    f"{self._search_apis}/search",
+                    f"{self._search_api}/search",
                     json={"query_text": query, "top_k": 5, "doc_type": "product"},
                     timeout=10.0
                 )

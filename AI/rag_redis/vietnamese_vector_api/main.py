@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from typing import Any, Dict, List, Optional
 
@@ -33,18 +34,29 @@ async def lifespan(app: FastAPI):  # pragma: no cover - executed on app startup
 
 app = FastAPI(lifespan=lifespan, title="Vietnamese Vector Search API")
 
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cho phép tất cả origins. Trong production nên chỉ định cụ thể
+    allow_credentials=True,
+    allow_methods=["*"],  # Cho phép tất cả HTTP methods
+    allow_headers=["*"],  # Cho phép tất cả headers
+)
+
 
 def get_embedding_service(request: Request) -> EmbeddingService:
     service = getattr(request.app.state, "embedding_service", None)
     if not isinstance(service, EmbeddingService):
-        raise HTTPException(status_code=500, detail="embedding_service unavailable")
+        HTTPException(status_code=500, detail="embedding_service unavailable")
+        return
     return service
 
 
 def get_vector_db_service(request: Request) -> VectorDBService:
     service = getattr(request.app.state, "vector_service", None)
     if not isinstance(service, VectorDBService):
-        raise HTTPException(status_code=500, detail="vector_service unavailable")
+        HTTPException(status_code=500, detail="vector_service unavailable")
+        return
     return service
 
 
@@ -54,9 +66,13 @@ async def add_document(
     embed_service: EmbeddingService = Depends(get_embedding_service),
     vdb_service: VectorDBService = Depends(get_vector_db_service),
 ) -> DocumentResponse:
+    if payload.doc_type not in ["product", "policy"]:
+        HTTPException(status_code=400, detail="doc_type must be 'product' or 'policy'")
+        return
     vector = await run_in_threadpool(embed_service.embed, payload.text_content)
     await run_in_threadpool(
         vdb_service.add_document,
+        payload.doc_type,
         payload.doc_id,
         payload.text_content,
         vector,
@@ -71,9 +87,15 @@ async def update_document(
     embed_service: EmbeddingService = Depends(get_embedding_service),
     vdb_service: VectorDBService = Depends(get_vector_db_service),
 ) -> DocumentResponse:
+    if payload.doc_type not in ["product", "policy"]:
+        HTTPException(status_code=400, detail="doc_type must be 'product' or 'policy'")
+        return
+
     vector = await run_in_threadpool(embed_service.embed, payload.text_content)
+    
     await run_in_threadpool(
         vdb_service.update_document,
+        payload.doc_type,
         doc_id,
         payload.text_content,
         vector,
@@ -81,12 +103,17 @@ async def update_document(
     return DocumentResponse(status="updated", doc_id=doc_id)
 
 
-@app.delete("/documents/{doc_id}", response_model=DocumentResponse)
+@app.delete("/documents/{doc_id}/{doc_type}", response_model=DocumentResponse)
 async def delete_document(
     doc_id: str,
+    doc_type: str,
     vdb_service: VectorDBService = Depends(get_vector_db_service),
 ) -> DocumentResponse:
-    await run_in_threadpool(vdb_service.delete_document, doc_id)
+    if doc_type not in ["product", "policy"]:
+        HTTPException(status_code=400, detail="doc_type must be 'product' or 'policy'")
+        return
+
+    await run_in_threadpool(vdb_service.delete_document,doc_type, doc_id)
     return DocumentResponse(status="deleted", doc_id=doc_id)
 
 
@@ -96,6 +123,8 @@ async def search_documents(
     embed_service: EmbeddingService = Depends(get_embedding_service),
     vdb_service: VectorDBService = Depends(get_vector_db_service),
 ) -> Dict[str, Any] | None:
+    if query.doc_type not in ["product", "policy"]:
+        raise HTTPException(status_code=400, detail="doc_type must be 'product', 'policy' or empty")
     query_vector = await run_in_threadpool(embed_service.embed, query.query_text)
     results = await run_in_threadpool(vdb_service.search_documents, query_vector, query.top_k, query.doc_type)
     return {"results": results}

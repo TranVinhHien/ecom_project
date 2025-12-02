@@ -91,6 +91,7 @@ class SendMessageRequest(BaseModel):
     message: str
     user_id: Optional[str] = None
     session_id: Optional[str] = None
+    product_key: Optional[str] = None
 
 class SendMessageResponse(BaseModel):
     success: bool
@@ -188,7 +189,7 @@ async def send_message(request: SendMessageRequest,raw_request: Request):
                 session_id=session_id
             )
 
-        response = await call_agent_async(host.runner, user_id, session_id, request.message, token)
+        response = await call_agent_async(host.runner, user_id, session_id, request.message, token, request.product_key)
         if not response:
             return SendMessageResponse(
                 success=False,

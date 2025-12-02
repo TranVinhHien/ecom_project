@@ -26,6 +26,7 @@ import { Loading } from '@/components/ui/loading';
 import { getImageUrl } from '@/assets/helpers/convert_tool';
 import { INFO_USER } from '@/assets/configs/request';
 import { UserProfile } from '@/types/user.types';
+import HomeBannerSlider from '@/components/HomeBannerSlider';
 
 export default function ShopPage({ params }: { params: { id: string } }) {
   const t = useTranslations("System");
@@ -107,10 +108,11 @@ export default function ShopPage({ params }: { params: { id: string } }) {
   });
 
   // Fetch banners
-  const { data: homeBanners } = useGetActiveBanners('HOME');
-  const { data: categoryBanners } = useGetActiveBanners('CATEGORY');
-  const { data: productBanners } = useGetActiveBanners('PRODUCT');
-  const { data: promotionBanners } = useGetActiveBanners('PROMOTION');
+  const { data: homeBanners } = useGetActiveBanners('HOME', params.id);
+  const { data: categoryBanners } = useGetActiveBanners('CATEGORY', params.id);
+  const { data: productBanners } = useGetActiveBanners('PRODUCT', params.id);
+  const { data: promotionBanners } = useGetActiveBanners('PROMOTION', params.id);
+  // const { data: shopBanners } = useGetActiveBanners('SHOP', params.id);
 
   // Fetch categories
   const { data: categoriesData } = useGetCategories();
@@ -210,6 +212,10 @@ export default function ShopPage({ params }: { params: { id: string } }) {
   const shopCategoryBanners = categoryBanners?.filter(b => b.shopId === params.id) || [];
   const shopProductBanners = productBanners?.filter(b => b.shopId === params.id) || [];
   const shopPromotionBanners = promotionBanners?.filter(b => b.shopId === params.id) || [];
+  // const shopBackgroundBanners = shopBanners?.filter(b => b.shopId === params.id) || [];
+  
+  // Get the first shop banner for background
+  // const shopBackgroundBanner = shopBackgroundBanners.length > 0 ? shopBackgroundBanners[0] : null;
 
   // Auto slide for banner slideshow - Must be before early returns
   useEffect(() => {
@@ -255,9 +261,23 @@ export default function ShopPage({ params }: { params: { id: string } }) {
     setHomeProductsPage(prev => prev + 1);
   };
 
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  useEffect(() => {
+    const userInfo = localStorage.getItem(INFO_USER);
+    if (userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setProfile(userData);
+      }
+      catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-[400pxS]">
         <Loading size="lg" variant="primary" />
       </div>
     );
@@ -287,27 +307,25 @@ export default function ShopPage({ params }: { params: { id: string } }) {
   };
 
 
-  const [profile, setProfile] = useState<UserProfile   | null>(null);
-  useEffect(() => {
-    const userInfo = localStorage.getItem(INFO_USER);
-    if (userInfo) {
-      try {
-        const userData = JSON.parse(userInfo);
-        setProfile(userData);
-      }
-      catch (error) {
-        console.error("Error parsing user data:", error);
-      }
-    }
-  }, []);
-
 
   return (
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto py-6 px-4">
         {/* Shop Header - Compact */}
-        <div className="bg-white rounded-lg p-6 mb-4 shadow-sm">
-          <div className="flex items-center gap-6">
+        <div 
+          className="bg-white rounded-lg p-6 mb-4 shadow-sm relative overflow-hidden"
+          style={{
+            backgroundImage: data.result.shopBanner ? `url(${getImageUrl(data.result.shopBanner)})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }}
+        >
+          {/* Overlay để làm nổi nội dung */}
+          {data.result.shopBanner && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm" />
+          )}
+          <div className="flex items-center gap-6 relative z-10">
             {/* Shop Logo */}
             <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-blue-500 flex-shrink-0 bg-white">
               <img 
@@ -383,84 +401,11 @@ export default function ShopPage({ params }: { params: { id: string } }) {
           {/* Tab 1: Cửa Hàng - Banners */}
           <TabsContent value="shop" className="space-y-6">
             {/* Home Banners - Slideshow */}
-            {shopHomeBanners.length > 0 && (
-              <div 
-                className="relative rounded-2xl overflow-hidden"
-                onMouseEnter={() => setIsBannerPaused(true)}
-                onMouseLeave={() => setIsBannerPaused(false)}
-              >
-                {/* Slideshow Container */}
-                <div className="relative w-full h-[400px] md:h-[500px]">
-                  {shopHomeBanners.map((banner, index) => (
-                    <div
-                      key={banner.id}
-                      onClick={() => handleBannerClick(banner.bannerUrl)}
-                      className={`absolute inset-0 transition-opacity duration-700 ease-in-out cursor-pointer ${
-                        index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'
-                      }`}
-                    >
-                      <img
-                        src={getImageUrl(banner.bannerImage)}
-                        alt={banner.bannerName}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/placeholder.png';
-                        }}
-                      />
-                    </div>
-                  ))}
-                  
-                  {/* Navigation Buttons - Only show if more than 1 banner */}
-                  {shopHomeBanners.length > 1 && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white shadow-lg"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleBannerPrev();
-                        }}
-                      >
-                        <ChevronLeft className="w-6 h-6" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white shadow-lg"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleBannerNext();
-                        }}
-                      >
-                        <ChevronRight className="w-6 h-6" />
-                      </Button>
-                    </>
-                  )}
-                  
-                  {/* Dots Indicator */}
-                  {shopHomeBanners.length > 1 && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
-                      {shopHomeBanners.map((_, index) => (
-                        <button
-                          key={index}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleBannerDotClick(index);
-                          }}
-                          className={`w-2 h-2 rounded-full transition-all ${
-                            index === currentBannerIndex
-                              ? 'bg-white w-8'
-                              : 'bg-white/50 hover:bg-white/75'
-                          }`}
-                          aria-label={`Go to slide ${index + 1}`}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            <HomeBannerSlider 
+              banners={shopHomeBanners} 
+              className="w-full mb-6"
+              height="h-[400px] md:h-[500px]"
+            />
 
             {/* Category Banners - Large Grid */}
             {shopCategoryBanners.length > 0 && (
@@ -587,7 +532,7 @@ export default function ShopPage({ params }: { params: { id: string } }) {
                     </div>
                   )}
                 </>
-              ) : !isLoadingHomeProducts ? (
+              ) : !isLoadingHomeProducts&& homeProductsData?.data?.length === 0 ? (
                 <div className="bg-white rounded-2xl p-12 text-center shadow-sm">
                   <Package className="w-20 h-20 mx-auto mb-4 text-gray-300" />
                   <p className="text-gray-500 text-lg">Cửa hàng chưa có sản phẩm nào</p>

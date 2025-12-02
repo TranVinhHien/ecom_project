@@ -345,12 +345,13 @@ export const useClearCart = () => {
  * Hook để lấy danh sách banners theo loại
  * GET /Banners/active
  */
-export const useGetActiveBanners = (bannerType?: BannerType) => {
+export const useGetActiveBanners = (bannerType?: BannerType,shop_id?: string) => {
   return useQuery<BannerApiResponse['result'], Error>({
     queryKey: ['banners', bannerType],
     queryFn: async () => {
       const params: Record<string, any> = {};
       if (bannerType) params.bannerType = bannerType;
+      if (shop_id) params.shopId = shop_id;
 
       const response = await apiClient.get<BannerApiResponse>('/Banners/active', {
         params,

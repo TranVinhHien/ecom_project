@@ -70,7 +70,6 @@ export default function SearchPage() {
   const { data: categoryBanners } = useGetActiveBanners("CATEGORY");
   const normalizedCatePath = cate_path ? decodeURIComponent(cate_path) : undefined;
   const matchedCategoryBanner = useMemo(() => {
-    console.log('categoryBanners', categoryBanners);
     if (!categoryBanners || !normalizedCatePath) return null;
 
     const matched = categoryBanners
@@ -80,7 +79,6 @@ export default function SearchPage() {
       }))
       .filter(({ meta }) => meta && meta.catePath === normalizedCatePath)
       .sort((a, b) => (a.banner.bannerOrder || 0) - (b.banner.bannerOrder || 0));
-    console.log(matched);
     return matched[0] || null;
   }, [categoryBanners, normalizedCatePath]);
 
@@ -135,16 +133,16 @@ export default function SearchPage() {
             onClick={() => handleBannerNavigation(matchedCategoryBanner.meta!)}
             className="block w-full"
           >
-            <div className="relative w-full h-40 md:h-56 lg:h-64 overflow-hidden rounded-xl shadow">
+            <div className="relative w-full h-40 md:h-67 lg:h-96 overflow-hidden rounded-xl shadow">
 
   <img
     src={getImageUrl(matchedCategoryBanner.banner.bannerImage)}
     alt={matchedCategoryBanner.banner.bannerName}
     
     // SỬA: Thêm "block" và "mx-auto". Bỏ "center"
-    className="object-cover w-[70vw] block mx-auto h-[250px] md:h-[400px] lg:h-[500px] xl:h-[650px]"
+    className=" w-[70vw] mx-auto  h-[500px] md:h-[500px]"
     
-    sizes="70vw"
+    // sizes="70vw"
 />
             </div>
           </button>

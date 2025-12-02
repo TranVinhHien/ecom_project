@@ -283,7 +283,7 @@ export default function Header({ onClick }: { onClick: () => void }) {
                                             return "/default-avatar.png";
                                         }}
                                     />
-                                    <span className="font-medium hidden lg:inline">{info.name}</span>
+                                    <span style={{"color":"white"}} className="font-medium hidden lg:inline">{info.name}</span>
                                     <ChevronDown className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -558,12 +558,12 @@ export default function Header({ onClick }: { onClick: () => void }) {
                         {/* Notifications & Cart - Only show when logged in */}
                         {info && (
                             <>
-                                <Button variant="ghost" size="icon" className="relative hidden md:flex items-center justify-center">
+                                {/* <Button variant="ghost" size="icon" className="relative hidden md:flex items-center justify-center">
                                     <Bell className="h-4 w-4 lg:h-5 lg:w-5 text-[hsl(var(--primary))]" />
                                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
                                         3
                                     </span>
-                                </Button>
+                                </Button> */}
                             
                                 <Button 
                                     variant="ghost" 

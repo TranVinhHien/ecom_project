@@ -19,6 +19,7 @@ export interface ShopInfo {
   shopPersonalIdentifyId: string;
   shopEmail: string;
   shopPhone: string;
+  shopBanner: string;
   shopStatus: boolean;
   walletAmount: number;
   followerCount: number;

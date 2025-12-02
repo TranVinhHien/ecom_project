@@ -71,11 +71,16 @@ export default function SearchPage() {
             similarity: number
           }[]
         } = response.data
-        console.log(data_search_image)
+        console.log("Search image results:", data_search_image)
       
         const productIds = data_search_image.results
-            .filter(item => item.similarity > 0.01)
+            .filter(item => item.similarity > 0.7)
             .map(item => item.product_id);
+
+        if (productIds.length === 0) {
+          setProducts([]);
+          return;
+        }
 
         // 1. Tạo query string thủ công: "product_ids=id1&product_ids=id2"
         const queryString = productIds
@@ -90,33 +95,54 @@ export default function SearchPage() {
             customBaseURL: API.base_product,
         });
 
+        console.log("response_product:", response_product.data);
 
-        console.log("response_product:", response_product);
-        // const productIds = data_search_image.results.filter(item => item.similarity>0.75).map(item => item.product_id);
-         
-        // const response_product = await apiClient.get('/product/get_products_detail_for_search'+, {
-        //   headers: {
-        //     'Content-Type': 'multipart/form-data',
-        //   },
-        //   customBaseURL: API.base_product,
-        // });
-
-        // const productsList = data.products ?? [];
-        // setPrediction({
-        //   label: "label_example", // Replace with actual label from response
-        //   confidence: 0.95 // Replace with actual confidence from response
-        // });
+        // Transform data from API response to match ProductSummary interface
+        const productsData = response_product.data?.result?.data || [];
         
-        // // Transform products data
-        // const updatedProducts = productsList.map((product: any) => {
-        //   const { product_spu_id, ...rest } = product;
-        //   return {
-        //     ...rest,
-        //     products_spu_id: product_spu_id,
-        //   };
-        // });
+        const transformedProducts = productsData.map((item: any) => {
+          // Tìm SKU có giá thấp nhất
+          const minPriceSku = item.sku?.reduce((min: any, sku: any) => 
+            sku.price < min.price ? sku : min, item.sku[0]
+          );
+          
+          // Tìm SKU có giá cao nhất
+          const maxPriceSku = item.sku?.reduce((max: any, sku: any) => 
+            sku.price > max.price ? sku : max, item.sku[0]
+          );
 
-        // setProducts(updatedProducts);
+          // Map đúng theo ProductSummary interface
+          return {
+            id: item.product.id,
+            name: item.product.name,
+            key: item.product.key,
+            image: item.product.image,
+            shop_id: '', // Không có trong response, để empty
+            brand_id: '', // Không có trong response, chỉ có brand name
+            category_id: '', // Không có trong response, chỉ có category name
+            min_price: minPriceSku?.price || 0,
+            max_price: maxPriceSku?.price || 0,
+            min_price_sku_id: minPriceSku?.id || '',
+            max_price_sku_id: maxPriceSku?.id || '',
+            description: item.product.short_description || '',
+            total_sold: 0, // Không có trong response
+            short_description: item.product.short_description || '',
+            media: null, // Không có trong response
+            product_is_permission_check: item.product.product_is_permission_check,
+            product_is_permission_return: item.product.product_is_permission_return,
+            delete_status: '', // Không có trong response
+            create_date: '', // Không có trong response
+            update_date: '', // Không có trong response
+            rating: {
+              product_id: item.product.id,
+              total_reviews: 0, // Không có trong response
+              average_rating: 0, // Không có trong response
+            }
+          };
+        });
+
+        console.log("Transformed products:", transformedProducts);
+        setProducts(transformedProducts);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Lỗi khi tìm kiếm sản phẩm');
         console.error('Error fetching products:', err);

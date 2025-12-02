@@ -2,16 +2,14 @@
 
 import C_ProductSimple from "@/resources/components_thuongdung/product";
 import { useTranslations } from "next-intl";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useGetActiveBanners, useGetProducts } from "@/services/apiService";
 import { ProductSummary } from "@/types/product.types";
-import { Banner } from "@/types/shop.types";
-import { getImageUrl } from "@/assets/helpers/convert_tool";
-import { useRouter } from "@/i18n/routing";
-import { Image } from "lucide-react";
 import { UserProfile } from "@/types/user.types";
 import { INFO_USER } from "@/assets/configs/request";
 import { event_type } from "@/types/collection.types";
+import PersonalizedRecommendations from "@/components/PersonalizedRecommendations";
+import HomeBannerSlider from "@/components/HomeBannerSlider";
 
 export default function Home() {
   const t = useTranslations("System");
@@ -64,105 +62,17 @@ export default function Home() {
 
   return (
     <div className="pt-36">
-      <HomeBannerSlider banners={homeBanners || []} />
-      <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-        <div className="mb-64" />
-        <TopSearchSection items={products} t={t} />
-        <div className="mb-8" />
-          <HomeSuggestion products={products} user_id={profile?.id || ""} title="Bán chạy nhất điện tử" t={t} collection_type="click" />
-        <HomeSuggestion products={data_cham_soc_nha_cua?.data || []} user_id={profile?.id || ""} title="Chăm sóc nhà cửa" t={t} collection_type="click" />
-      </div>
-    </div>
-  );
-}
-
-function HomeBannerSlider({ banners }: { banners: Banner[] }) {
-  const router = useRouter();
-  const sortedBanners = useMemo(() => {
-    return [...banners].sort((a, b) => (a.bannerOrder || 0) - (b.bannerOrder || 0));
-  }, [banners]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    if (sortedBanners.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % sortedBanners.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [sortedBanners.length]);
-
-  if (sortedBanners.length === 0) {
-    return null;
-  }
-
-  const handleNavigate = (rawUrl?: string) => {
-    if (!rawUrl) return;
-    const url = rawUrl.trim();
-    if (url.startsWith("http")) {
-      window.open(url, "_blank", "noopener noreferrer");
-      return;
-    }
-    router.push(url);
-  };
-
-  return (
-    <div className="w-full px-4 md:px-8 lg:px-16 mb-10">
-      <div className="relative w-full h-48 md:h-64 lg:h-80 rounded-2xl overflow-hidden shadow-lg">
-        {sortedBanners.map((banner, index) => (
-          <button
-            key={banner.id}
-            type="button"
-            onClick={() => handleNavigate(banner.bannerUrl)}
-            className={`absolute inset-0 transition-opacity duration-700 ${currentIndex === index ? "opacity-100 z-10" : "opacity-0"}`}
-            aria-label={banner.bannerName}
-          >
-             {/* <img
-      src={getImageUrl(banner.bannerImage)}
-      alt={banner.bannerName}      
-      className="object-cover w-full h-[180px] md:h-[300px] lg:h-[400px] xl:h-[500px]"
-      sizes="100vw"
-      /> */}
-
-  <img
-    src={getImageUrl(banner.bannerImage)}
-    alt={banner.bannerName}
-    
-    // SỬA: Thêm "block" và "mx-auto". Bỏ "center"
-    className="object-cover w-[70vw] block mx-auto h-[250px] md:h-[400px] lg:h-[500px] xl:h-[650px]"
-    
-    sizes="70vw"
-/>
-          </button>
-        ))}
-
-        {sortedBanners.length > 1 && (
-          <>
-            <button
-              type="button"
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 text-white rounded-full p-2 z-20"
-              onClick={() => setCurrentIndex((prev) => (prev - 1 + sortedBanners.length) % sortedBanners.length)}
-              aria-label="Previous banner"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 text-white rounded-full p-2 z-20"
-              onClick={() => setCurrentIndex((prev) => (prev + 1) % sortedBanners.length)}
-              aria-label="Next banner"
-            >
-              ›
-            </button>
-            <div className="absolute bottom-4 inset-x-0 flex justify-center gap-2 z-20">
-              {sortedBanners.map((_, index) => (
-                <span
-                  key={`dot-${index}`}
-                  className={`h-2 w-2 rounded-full ${currentIndex === index ? "bg-white" : "bg-white/50"}`}
-                />
-              ))}
-            </div>
-          </>
+      <HomeBannerSlider banners={homeBanners || []}   height="h-[400px] md:h-[500px]" />
+      <div className="container mx-auto px-4 md:px-8 lg:px-16 py-8">
+        {profile?.id && (
+          <PersonalizedRecommendations 
+            userId={profile.id} 
+            title="Gợi ý dành riêng cho bạn" 
+            limit={25}
+          />
         )}
+        <HomeSuggestion products={products} user_id={profile?.id || ""} title="Bán chạy nhất điện tử" t={t} collection_type="click" />
+        <HomeSuggestion products={data_cham_soc_nha_cua?.data || []} user_id={profile?.id || ""} title="Chăm sóc nhà cửa" t={t} collection_type="click" />
       </div>
     </div>
   );
@@ -216,18 +126,15 @@ function TopSearchSection({ items, t }: { items: ProductSummary[], t: any }) {
 function HomeSuggestion({ products, title, t,user_id,collection_type }: { products: ProductSummary[], title: string, t: any, user_id: string, collection_type: event_type }) {
  
   return (
-    <div className="w-full px-4 md:px-0">
-      <section className="bg-[#f5f5f5] py-4 px-4 md:px-6 rounded-lg mb-8 w-full">
-        <div className="flex items-center border-b-2 border-[#ee4d2d] pb-2 mb-4">
-          <span className="text-base md:text-lg font-bold text-[#ee4d2d] uppercase tracking-wider">{title}</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
-          {products.length > 0 && products?.map(product => (
-            <C_ProductSimple key={product.id} product={product} collection_type={collection_type} user_id={user_id} />
-          ))}
-        </div>
-       
-      </section>
-    </div>
+    <section className="bg-[#f5f5f5] py-4 px-4 md:px-6 rounded-lg mb-8 w-full">
+      <div className="flex items-center border-b-2 border-[#ee4d2d] pb-2 mb-4">
+        <span className="text-base md:text-lg font-bold text-[#ee4d2d] uppercase tracking-wider">{title}</span>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {products.length > 0 && products?.map(product => (
+          <C_ProductSimple key={product.id} product={product} collection_type={collection_type} user_id={user_id} />
+        ))}
+      </div>
+    </section>
   );
 }

@@ -1,6 +1,5 @@
-import { Heart, Star, StarIcon } from "lucide-react"
+import { Heart, StarIcon } from "lucide-react"
 import { Link } from '@/i18n/routing';
-import { useTranslations } from "next-intl";
 import { ProductSummary } from "@/types/product.types";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import Image from "next/image";
@@ -10,24 +9,21 @@ import { Button } from "@/components/ui/button";
 import {getImageUrl, formatPrice} from "@/assets/helpers/convert_tool";
 import { useCollectData } from "@/services/apiService";
 import { event_type } from "@/types/collection.types";
-import { INFO_USER } from "@/assets/configs/request";
 
-const C_ProductSimple = ({ product ,collection_type,user_id }: { product: ProductSummary, collection_type: event_type, user_id?: string }) => {
+const C_ProductSimple = ({ product, collection_type, user_id }: { product: ProductSummary, collection_type: event_type, user_id?: string }) => {
 
   const collectMutation = useCollectData();
 
-  const onProductClick =async () => {
-    if (!user_id){
-      user_id = "guest";
-    }
+  const onProductClick = async () => {
+    const finalUserId = user_id || "guest";
     await collectMutation.mutateAsync({
-          product_id: product.id,
-          event_type:collection_type ,
-          user_id: user_id, 
-          shop_id: product.shop_id,
-          price: product.min_price,
-          quantity: 1,
-        });
+      product_id: product.id,
+      event_type: collection_type,
+      user_id: finalUserId, 
+      shop_id: product.shop_id,
+      price: product.min_price,
+      quantity: 1,
+    });
   }
   return (
     

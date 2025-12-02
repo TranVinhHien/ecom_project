@@ -93,7 +93,7 @@ export default function RegisterForm() {
             console.log("Code:", result.code);
             console.log("Result:", result.result);
             
-            if (result.code !== 10000) {
+            if (result.code !== 9997) {
                 console.error("REGISTER ERROR:", result);
                 throw new Error(result.message || "Đăng ký thất bại");
             }

@@ -18,7 +18,7 @@ build_payment:
     - docker build -t $PRODUCT_IMAGE .
     - docker push $PRODUCT_IMAGE
   tags:
-    - lab-server
+    - server-dev
   rules:
     - if: $CI_COMMIT_TAG
       changes:
@@ -39,7 +39,7 @@ deploy_payment:
       -d -p $PRODUCT_HOST_PORT:$PRODUCT_CONTAINER_PORT \
       $PRODUCT_IMAGE
   tags:
-    - lab-server
+    - server-dev
   rules:
     - if: $CI_COMMIT_TAG
       changes:
@@ -53,7 +53,7 @@ showlog_payment:
     - sleep 10
     - docker logs $PRODUCT_CONTAINER
   tags:
-    - lab-server
+    - server-dev
   rules:
     - if: $CI_COMMIT_TAG
       changes:

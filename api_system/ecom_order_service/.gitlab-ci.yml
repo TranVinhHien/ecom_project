@@ -19,7 +19,7 @@
 #         - docker build -t $DOCKER_IMAGE .
 #         - docker push $DOCKER_IMAGE
 #     tags:
-#         - lab-server
+#         - server-dev
 #     only:
 #         - tags
 
@@ -34,7 +34,7 @@
 #         - docker rm -f $DOCKER_CONTAINER
 #         - docker run --name $DOCKER_CONTAINER -d -p $HOST_PORT:$CONTAINER_PORT $DOCKER_IMAGE
 #     tags:
-#         - lab-server
+#         - server-dev
 #     only:
 #         - tags
 
@@ -46,7 +46,7 @@
 #         - sleep 20
 #         - docker logs $DOCKER_CONTAINER
 #     tags:
-#         - lab-server
+#         - server-dev
 #     only:
 #         - tags
 variables:
@@ -69,7 +69,7 @@ build_order:
     - docker build -t $PRODUCT_IMAGE .
     - docker push $PRODUCT_IMAGE
   tags:
-    - lab-server
+    - server-dev
   rules:
     - if: $CI_COMMIT_TAG
       changes:
@@ -90,7 +90,7 @@ deploy_order:
       -d -p $PRODUCT_HOST_PORT:$PRODUCT_CONTAINER_PORT \
       $PRODUCT_IMAGE
   tags:
-    - lab-server
+    - server-dev
   rules:
     - if: $CI_COMMIT_TAG
       changes:
@@ -104,7 +104,7 @@ showlog_order:
     - sleep 10
     - docker logs $PRODUCT_CONTAINER
   tags:
-    - lab-server
+    - server-dev
   rules:
     - if: $CI_COMMIT_TAG
       changes:

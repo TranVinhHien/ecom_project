@@ -37,6 +37,6 @@ RUN addgroup -g 1000 appgroup && \
 
 USER appuser
 
-COPY app.env .
+# COPY app.env .
 EXPOSE 9001
 CMD ["/app/main"]

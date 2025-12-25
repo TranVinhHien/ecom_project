@@ -13,7 +13,7 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 WORKDIR /app
 COPY --from=builder /app/main .
-COPY app.env .
+# COPY app.env .
 COPY db/migration ./db/migration
 
 EXPOSE 9003

@@ -1,0 +1,16 @@
+# 1. Khai báo toàn bộ các Stages sẽ dùng trong dự án
+# Lưu ý: Các file con chỉ được dùng các stage có trong danh sách này
+stages:
+  - buildandpush
+  - deploy
+  - showlog
+# 2. Khai báo biến toàn cục (Global Variables)
+variables:
+  REGISTRY_URL: "docker.io" 
+
+include:
+  - local: '/api_system/ecom_product_service/.gitlab-ci.yml'
+  - local: '/api_system/ecom_order_service/.gitlab-ci.yml'
+  - local: '/api_system/ecom_payment_service/.gitlab-ci.yml'
+  # --- Frontend Client ---
+  # - local: '/client/ecom_user_client/.gitlab-ci.yml'

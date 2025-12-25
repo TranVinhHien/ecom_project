@@ -84,11 +84,7 @@ deploy_order:
   script:
     - docker pull $ORDER_IMAGE
     - docker rm -f $ORDER_CONTAINER || true
-    - docker run --name $ORDER_CONTAINER \
-      --env-file $ENV_FILE_ORDER \
-      --restart unless-stopped \
-      -d -p $ORDER_HOST_PORT:$ORDER_CONTAINER_PORT \
-      $ORDER_IMAGE
+    - docker run --name $ORDER_CONTAINER --env-file $ENV_FILE_ORDER --restart unless-stopped -d -p $ORDER_HOST_PORT:$ORDER_CONTAINER_PORT $ORDER_IMAGE
   tags:
     - server-dev
   rules:

@@ -33,11 +33,7 @@ deploy_payment:
   script:
     - docker pull $PAYMENT_IMAGE
     - docker rm -f $PAYMENT_CONTAINER || true
-    - docker run --name $PAYMENT_CONTAINER \
-      --env-file $ENV_FILE_PAYMENT \
-      --restart unless-stopped \
-      -d -p $PAYMENT_HOST_PORT:$PAYMENT_CONTAINER_PORT \
-      $PAYMENT_IMAGE
+    - docker run --name $PAYMENT_CONTAINER --env-file $ENV_FILE_PAYMENT --restart unless-stopped -d -p $PAYMENT_HOST_PORT:$PAYMENT_CONTAINER_PORT $PAYMENT_IMAGE
   tags:
     - server-dev
   rules:

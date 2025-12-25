@@ -52,7 +52,7 @@
 variables:
   PRODUCT_NAME: "api-product-service" 
   PRODUCT_IMAGE: ${REGISTRY_USER}/${PRODUCT_NAME}:${CI_COMMIT_TAG}_${CI_COMMIT_SHORT_SHA}
-  PRODUCT_CONTAINER: ${CI_PROJECT_NAME}___${PRODUCT_NAME}   
+  PRODUCT_CONTAINER: ${CI_PROJECT_NAME}${PRODUCT_NAME}   
   PRODUCT_HOST_PORT: "9001"
   PRODUCT_CONTAINER_PORT: "9001"
   SERVICE_PATH: "api_system/ecom_product_service"
@@ -84,11 +84,7 @@ deploy_product:
   script:
     - docker pull $PRODUCT_IMAGE
     - docker rm -f $PRODUCT_CONTAINER || true
-    - docker run --name $PRODUCT_CONTAINER \
-      --env-file $ENV_FILE_PRODUCT \
-      --restart unless-stopped \
-      -d -p $PRODUCT_HOST_PORT:$PRODUCT_CONTAINER_PORT \
-      $PRODUCT_IMAGE
+    - docker run --name $PRODUCT_CONTAINER --env-file $ENV_FILE_PRODUCT --restart unless-stopped -d -p $PRODUCT_HOST_PORT:$PRODUCT_CONTAINER_PORT $PRODUCT_IMAGE
   tags:
     - server-dev
   rules:

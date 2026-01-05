@@ -12,5 +12,3 @@ include:
   - local: '/api_system/ecom_product_service/.gitlab-ci.yml'
   - local: '/api_system/ecom_order_service/.gitlab-ci.yml'
   - local: '/api_system/ecom_payment_service/.gitlab-ci.yml'
-  # --- Frontend Client ---
-  # - local: '/client/ecom_user_client/.gitlab-ci.yml'

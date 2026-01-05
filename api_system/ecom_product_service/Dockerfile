@@ -1,42 +1,43 @@
-# Build stage - sử dụng Go 1.24 (theo yêu cầu của go.mod)
+# --- Stage 1: Builder ---
 FROM golang:1.24-alpine AS builder
-
-# thêm timezone 
-RUN apk add --no-cache tzdata
-
 
 WORKDIR /app
 
-RUN apk add --no-cache git ca-certificates tzdata
+# Gom cài đặt vào 1 dòng để giảm layer, cài git và tzdata
+RUN apk add --no-cache git tzdata ca-certificates
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
 
+# Build static binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
     -o main main.go
 
+# --- Stage 2: Runner ---
 FROM alpine:3.20
-# Copy timezone data từ builder
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 WORKDIR /app
 
+# Copy Timezone và Certs từ builder
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
+# Copy Binary
 COPY --from=builder /app/main .
 
-RUN mkdir -p /app/images && chmod 755 /app/images
+# Setup thư mục images
+RUN mkdir -p /app/images
 
+# Setup User (Security)
 RUN addgroup -g 1000 appgroup && \
     adduser -D -u 1000 -G appgroup appuser && \
     chown -R appuser:appgroup /app
 
 USER appuser
 
-# COPY app.env .
 EXPOSE 9001
+
 CMD ["/app/main"]
